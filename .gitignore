@@ -1,0 +1,45 @@
+# Terraform: never commit plans or state (they can contain secrets)
+*.tfplan
+tfplan
+tfplan.*
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+plan.json
+**/plan.json
+!samples/terraform/plan-fixtures/*.plan.fixture.json
+
+# InfraGuard outputs and downloaded tools
+reports/
+audit/
+.cache/
+bin/
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+*.key
+kubeconfig*
+.kube/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+

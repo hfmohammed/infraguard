@@ -1,0 +1,7 @@
+apiVersion: v2
+name: noncompliant-app
+description: Deliberately vulnerable workload for InfraGuard demonstrations
+type: application
+version: 0.1.0
+appVersion: "latest"
+

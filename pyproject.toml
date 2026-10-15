@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "infraguard"
+version = "0.1.0"
+description = "Kubernetes and Terraform infrastructure policy validator"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11,<3.14"
+authors = [{name = "Hassan Mohammed"}]
+dependencies = [
+  "jinja2>=3.1,<4", "jsonschema>=4.22,<5", "kubernetes>=30,<32",
+  "mcp>=1.2,<2", "prometheus-client>=0.20,<1", "pydantic>=2.7,<3",
+  "PyYAML>=6.0.1,<7", "rich>=13.7,<15", "typer>=0.12,<1"
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.10", "pre-commit>=3.7", "pytest>=8.2", "pytest-cov>=5", "pytest-timeout>=2.3", "ruff>=0.5", "types-PyYAML"]
+
+[project.scripts]
+infraguard = "infraguard.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/infraguard"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --timeout=60"
+testpaths = ["tests"]
+markers = ["unit: isolated unit tests", "integration: requires a kind cluster", "slow: long-running tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["infraguard"]
+
+[tool.coverage.run]
+source = ["infraguard"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+

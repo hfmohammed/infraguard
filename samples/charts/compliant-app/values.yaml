@@ -1,0 +1,3 @@
+replicaCount: 2
+image: nginxinc/nginx-unprivileged:1.27.0
+

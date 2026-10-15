@@ -1,0 +1,7 @@
+apiVersion: v2
+name: compliant-app
+description: Secure reference workload for InfraGuard
+type: application
+version: 0.1.0
+appVersion: "1.27.0"
+
