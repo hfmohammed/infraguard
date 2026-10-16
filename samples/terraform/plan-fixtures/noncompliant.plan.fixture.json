@@ -1,0 +1,31 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_security_group.ssh_open",
+      "type": "aws_security_group",
+      "name": "ssh_open",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "ssh-open", "ingress": [{"protocol": "tcp", "from_port": 20, "to_port": 25, "cidr_blocks": ["0.0.0.0/0"]}]}, "after_sensitive": {}}
+    },
+    {
+      "address": "aws_security_group.wide_open",
+      "type": "aws_security_group",
+      "name": "wide_open",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "wide-open", "ingress": [{"protocol": "-1", "from_port": 0, "to_port": 0, "cidr_blocks": ["::/0"]}]}, "after_sensitive": {}}
+    },
+    {
+      "address": "aws_s3_bucket.raw_logs",
+      "type": "aws_s3_bucket",
+      "name": "raw_logs",
+      "change": {"actions": ["create"], "before": null, "after": {"bucket": "infraguard-raw-logs"}, "after_sensitive": {}}
+    },
+    {
+      "address": "aws_iam_policy.admin_everything",
+      "type": "aws_iam_policy",
+      "name": "admin_everything",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "admin-everything", "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"}]}"}, "after_sensitive": {}}
+    }
+  ]
+}
+

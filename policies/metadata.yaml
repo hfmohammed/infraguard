@@ -1,0 +1,190 @@
+- id: K8S-SEC-001
+  title: Privileged container
+  severity: CRITICAL
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Containers must not run in privileged mode.
+  remediation: "Set securityContext.privileged: false"
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-002
+  title: Container may run as root
+  severity: HIGH
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Workloads must explicitly run as a non-root user.
+  remediation: "Set runAsNonRoot: true and runAsUser: 10001"
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-003
+  title: Host namespaces enabled
+  severity: HIGH
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Workloads must not share host namespaces.
+  remediation: Remove host namespace settings or set them to false
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-004
+  title: hostPath volume
+  severity: HIGH
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Workloads must not mount arbitrary host paths.
+  remediation: Use emptyDir, a PVC, or a CSI volume
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-005
+  title: Privilege escalation allowed
+  severity: MEDIUM
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Containers must disable privilege escalation.
+  remediation: "Set allowPrivilegeEscalation: false"
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-006
+  title: Dangerous capabilities added
+  severity: HIGH
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Containers must not add broad Linux capabilities.
+  remediation: Drop ALL and add back only required capabilities
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-SEC-007
+  title: Writable root filesystem
+  severity: LOW
+  category: security
+  target: kubernetes
+  engine: conftest
+  description: Containers should use immutable root filesystems.
+  remediation: "Set readOnlyRootFilesystem: true"
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-REL-001
+  title: Missing resource requests/limits
+  severity: MEDIUM
+  category: reliability
+  target: kubernetes
+  engine: conftest
+  description: Containers need CPU and memory requests and a memory limit.
+  remediation: Set CPU/memory requests and a memory limit
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-REL-002
+  title: Mutable image tag
+  severity: MEDIUM
+  category: reliability
+  target: kubernetes
+  engine: conftest
+  description: Container images must use immutable version references.
+  remediation: Pin to a version tag or digest
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-REL-003
+  title: Missing liveness/readiness probes
+  severity: MEDIUM
+  category: reliability
+  target: kubernetes
+  engine: conftest
+  description: Long-running controllers need health probes.
+  remediation: Add HTTP or TCP liveness and readiness probes
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-REL-004
+  title: Single-replica Deployment in a prod tier
+  severity: LOW
+  category: reliability
+  target: kubernetes
+  engine: conftest
+  description: Production deployments need redundancy.
+  remediation: Set replicas to at least two and add a PodDisruptionBudget
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-NET-001
+  title: Externally exposed Service
+  severity: HIGH
+  category: network
+  target: kubernetes
+  engine: conftest
+  description: Public service exposure requires explicit approval.
+  remediation: Use ClusterIP or add the reviewed exposure annotation
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: K8S-NET-002
+  title: Namespace without a NetworkPolicy
+  severity: MEDIUM
+  category: network
+  target: kubernetes
+  engine: python
+  description: Every workload namespace needs a network policy.
+  remediation: Add a default-deny NetworkPolicy
+  fixture: samples/manifests/noncompliant/workloads.yaml
+- id: TF-AWS-NET-001
+  title: SSH open to the world
+  severity: CRITICAL
+  category: security
+  target: terraform
+  engine: conftest
+  description: SSH must not be internet-accessible.
+  remediation: Restrict SSH to a bastion or VPN CIDR
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-AWS-NET-002
+  title: Unrestricted ingress on all ports
+  severity: HIGH
+  category: network
+  target: terraform
+  engine: conftest
+  description: Security groups must restrict protocols and ports.
+  remediation: Limit ports and source CIDRs
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-AWS-S3-001
+  title: Public S3 bucket
+  severity: CRITICAL
+  category: security
+  target: terraform
+  engine: conftest
+  description: S3 buckets must block all public access.
+  remediation: Configure all public access block flags as true
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-AWS-S3-002
+  title: Unencrypted S3 bucket
+  severity: HIGH
+  category: security
+  target: terraform
+  engine: conftest
+  description: S3 buckets must use server-side encryption.
+  remediation: Add an SSE configuration, preferably with KMS
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-AWS-S3-003
+  title: Versioning disabled
+  severity: LOW
+  category: reliability
+  target: terraform
+  engine: conftest
+  description: S3 buckets should retain object versions.
+  remediation: Enable bucket versioning
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-AWS-IAM-001
+  title: Wildcard IAM policy
+  severity: CRITICAL
+  category: security
+  target: terraform
+  engine: conftest
+  description: IAM policy actions and resources must be least privilege.
+  remediation: Replace wildcard actions and resources with scoped values
+  fixture: samples/terraform/plan-fixtures/noncompliant.plan.fixture.json
+- id: TF-PLAN-001
+  title: Resource destroyed or replaced
+  severity: HIGH
+  category: change_risk
+  target: terraform
+  engine: terraform_analyzer
+  description: Destructive plan changes require review.
+  remediation: Confirm intent and add prevent_destroy to stateful resources
+  fixture: samples/terraform/plan-fixtures/destroy.plan.fixture.json
+- id: TF-PLAN-002
+  title: Stateful resource replacement
+  severity: CRITICAL
+  category: change_risk
+  target: terraform
+  engine: terraform_analyzer
+  description: Replacing a stateful resource can destroy data.
+  remediation: Use prevent_destroy or migrate data first
+  fixture: samples/terraform/plan-fixtures/destroy.plan.fixture.json
+

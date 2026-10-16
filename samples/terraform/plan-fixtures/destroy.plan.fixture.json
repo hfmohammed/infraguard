@@ -1,0 +1,19 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.main",
+      "type": "aws_db_instance",
+      "name": "main",
+      "change": {"actions": ["delete", "create"], "before": {"identifier": "demo-db"}, "after": {"identifier": "demo-db-v2"}, "before_sensitive": {}, "after_sensitive": {}}
+    },
+    {
+      "address": "aws_instance.legacy",
+      "type": "aws_instance",
+      "name": "legacy",
+      "change": {"actions": ["delete"], "before": {"id": "i-example"}, "after": null, "before_sensitive": {}}
+    }
+  ]
+}
+
