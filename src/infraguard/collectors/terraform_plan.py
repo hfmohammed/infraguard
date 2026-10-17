@@ -6,9 +6,10 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from infraguard.models import Resource, ResourceRef, SourceType, TerraformChange
 from infraguard.utils.redact import redact_sensitive
@@ -59,8 +60,12 @@ class TerraformPlanCollector:
             change = raw.get("change", {})
             cleaned = dict(raw)
             cleaned["change"] = dict(change)
-            cleaned["change"]["before"] = redact_sensitive(change.get("before"), change.get("before_sensitive", False))
-            cleaned["change"]["after"] = redact_sensitive(change.get("after"), change.get("after_sensitive", False))
+            cleaned["change"]["before"] = redact_sensitive(
+                change.get("before"), change.get("before_sensitive", False)
+            )
+            cleaned["change"]["after"] = redact_sensitive(
+                change.get("after"), change.get("after_sensitive", False)
+            )
             yield Resource(
                 ref=ResourceRef(
                     source=self.source,
@@ -98,10 +103,23 @@ class TerraformPlanCollector:
                 os.environ.update(environment)
                 run(["terraform", "init", "-backend=false", "-input=false"], cwd=work, timeout=300)
                 plan_path = root / "tfplan"
-                run(["terraform", "plan", "-input=false", "-lock=false", "-refresh=false", f"-out={plan_path}"], cwd=work, timeout=300)
+                run(
+                    [
+                        "terraform",
+                        "plan",
+                        "-input=false",
+                        "-lock=false",
+                        "-refresh=false",
+                        f"-out={plan_path}",
+                    ],
+                    cwd=work,
+                    timeout=300,
+                )
                 output = run(["terraform", "show", "-json", str(plan_path)], cwd=work).stdout
             finally:
                 os.environ.clear()
                 os.environ.update(previous)
-            return json.loads(output)
-
+            generated = json.loads(output)
+            if not isinstance(generated, dict):
+                raise ValueError("Terraform output must be a JSON object")
+            return generated

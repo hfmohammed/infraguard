@@ -3,4 +3,3 @@
 from infraguard.policies.catalog import PolicyCatalog
 
 __all__ = ["PolicyCatalog"]
-

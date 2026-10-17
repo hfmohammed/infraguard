@@ -25,10 +25,14 @@ def run(
 ) -> subprocess.CompletedProcess[str]:
     """Execute a command without a shell and enforce timeout and exit codes."""
     binary = which(cmd[0])
-    result = subprocess.run(  # noqa: S603 - argv-only execution is intentional
-        [str(binary), *cmd[1:]], cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False
+    result = subprocess.run(
+        [str(binary), *cmd[1:]],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
     )
     if result.returncode not in ok_codes:
         raise ToolError(f"{' '.join(cmd)} failed ({result.returncode}): {result.stderr.strip()}")
     return result
-

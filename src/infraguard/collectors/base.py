@@ -1,6 +1,7 @@
 """Collector interface."""
 
-from typing import Iterable, Protocol, runtime_checkable
+from collections.abc import Iterable
+from typing import Protocol, runtime_checkable
 
 from infraguard.models import Resource, SourceType
 
@@ -15,4 +16,3 @@ class Collector(Protocol):
     def collect(self) -> Iterable[Resource]: ...
 
     def describe_target(self) -> str: ...
-

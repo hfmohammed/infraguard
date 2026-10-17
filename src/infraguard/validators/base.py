@@ -12,4 +12,3 @@ class Validator(Protocol):
     name: str
 
     def validate(self, resources: list[Resource]) -> tuple[list[Finding], ValidatorRun]: ...
-

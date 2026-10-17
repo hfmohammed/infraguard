@@ -9,7 +9,12 @@ def test_resource_keys_are_stable() -> None:
 
 
 def test_terraform_address_is_the_key() -> None:
-    ref = ResourceRef(source=SourceType.TERRAFORM_PLAN, kind="aws_s3_bucket", name="logs", address="aws_s3_bucket.logs")
+    ref = ResourceRef(
+        source=SourceType.TERRAFORM_PLAN,
+        kind="aws_s3_bucket",
+        name="logs",
+        address="aws_s3_bucket.logs",
+    )
     assert ref.key() == "aws_s3_bucket.logs"
 
 
@@ -30,4 +35,3 @@ def test_fingerprint_is_deterministic(finding_values: dict[str, object]) -> None
     first = Finding.create(**finding_values)
     second = Finding.create(**finding_values)
     assert first.fingerprint == second.fingerprint
-

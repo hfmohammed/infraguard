@@ -27,4 +27,3 @@ class ReadOnlyViolation(InfraGuardError):
 
 class PathGuardError(InfraGuardError):
     """Raised when a path escapes the configured allowed root."""
-

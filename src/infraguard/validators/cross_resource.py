@@ -18,4 +18,3 @@ class CrossResourceValidator:
         findings, run = self.native.validate(resources)
         filtered = [finding for finding in findings if finding.policy_id == "K8S-NET-002"]
         return filtered, run.model_copy(update={"name": self.name, "findings": len(filtered)})
-

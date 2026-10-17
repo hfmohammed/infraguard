@@ -6,4 +6,3 @@ from infraguard.collectors.manifests import ManifestCollector
 from infraguard.collectors.terraform_plan import TerraformPlanCollector
 
 __all__ = ["Collector", "KubernetesLiveCollector", "ManifestCollector", "TerraformPlanCollector"]
-

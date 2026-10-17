@@ -17,10 +17,11 @@ def finding_values() -> dict[str, object]:
         "title": "Privileged container",
         "severity": Severity.CRITICAL,
         "category": Category.SECURITY,
-        "resource": ResourceRef(source=SourceType.MANIFEST, kind="Pod", name="api", namespace="prod"),
+        "resource": ResourceRef(
+            source=SourceType.MANIFEST, kind="Pod", name="api", namespace="prod"
+        ),
         "message": "container runs privileged",
         "remediation": "Disable privileged mode",
         "path": "spec.containers[0].securityContext.privileged",
         "validator": "python",
     }
-

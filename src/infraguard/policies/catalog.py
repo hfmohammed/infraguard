@@ -43,4 +43,3 @@ class PolicyCatalog:
 
     def __len__(self) -> int:
         return len(self._policies)
-

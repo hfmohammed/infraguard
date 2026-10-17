@@ -35,8 +35,12 @@ def redact_sensitive(value: Any, sensitive: Any) -> Any:
     if sensitive is True:
         return "***REDACTED***"
     if isinstance(value, dict) and isinstance(sensitive, dict):
-        return {key: redact_sensitive(item, sensitive.get(key, False)) for key, item in value.items()}
+        return {
+            key: redact_sensitive(item, sensitive.get(key, False)) for key, item in value.items()
+        }
     if isinstance(value, list) and isinstance(sensitive, list):
-        return [redact_sensitive(item, sensitive[i] if i < len(sensitive) else False) for i, item in enumerate(value)]
+        return [
+            redact_sensitive(item, sensitive[i] if i < len(sensitive) else False)
+            for i, item in enumerate(value)
+        ]
     return copy.deepcopy(value)
-

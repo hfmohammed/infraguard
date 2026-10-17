@@ -10,4 +10,3 @@ def test_catalog_loads_all_policies() -> None:
 def test_catalog_is_sorted() -> None:
     identifiers = [policy.id for policy in PolicyCatalog.load().all()]
     assert identifiers == sorted(identifiers)
-

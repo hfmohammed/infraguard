@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
 
 import yaml
 
@@ -55,7 +55,9 @@ class ManifestCollector:
                 files.update(path.rglob("*.yml"))
             elif path.suffix.lower() in {".yaml", ".yml"}:
                 files.add(path)
-        return sorted(file for file in files if file.name not in {"kustomization.yaml", "kustomization.yml"})
+        return sorted(
+            file for file in files if file.name not in {"kustomization.yaml", "kustomization.yml"}
+        )
 
     def _parse(self, content: str, source: str) -> Iterable[Resource]:
         for document in yaml.safe_load_all(content):
@@ -80,4 +82,3 @@ class ManifestCollector:
                 raw=redact_manifest(document),
                 collected_at=datetime.now(UTC),
             )
-

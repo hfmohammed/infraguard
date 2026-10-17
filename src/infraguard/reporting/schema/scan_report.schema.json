@@ -1,0 +1,400 @@
+{
+  "$defs": {
+    "Category": {
+      "enum": [
+        "security",
+        "reliability",
+        "network",
+        "change_risk",
+        "schema"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "remediation": {
+          "title": "Remediation",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "validator": {
+          "enum": [
+            "conftest",
+            "kubeconform",
+            "terraform_analyzer",
+            "python"
+          ],
+          "title": "Validator",
+          "type": "string"
+        },
+        "fingerprint": {
+          "title": "Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "policy_id",
+        "title",
+        "severity",
+        "category",
+        "resource",
+        "message",
+        "remediation",
+        "validator",
+        "fingerprint"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "ResourceRef": {
+      "additionalProperties": false,
+      "description": "Stable identity of a normalized resource.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceType"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "namespace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Namespace"
+        },
+        "api_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Version"
+        },
+        "address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        }
+      },
+      "required": [
+        "source",
+        "kind",
+        "name"
+      ],
+      "title": "ResourceRef",
+      "type": "object"
+    },
+    "ScanSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "resources_scanned": {
+          "title": "Resources Scanned",
+          "type": "integer"
+        },
+        "resources_by_source": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Resources By Source",
+          "type": "object"
+        },
+        "findings_total": {
+          "title": "Findings Total",
+          "type": "integer"
+        },
+        "by_severity": {
+          "$ref": "#/$defs/SeveritySummary"
+        },
+        "by_policy": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Policy",
+          "type": "object"
+        },
+        "policies_evaluated": {
+          "title": "Policies Evaluated",
+          "type": "integer"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "resources_scanned",
+        "resources_by_source",
+        "findings_total",
+        "by_severity",
+        "by_policy",
+        "policies_evaluated",
+        "passed"
+      ],
+      "title": "ScanSummary",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SeveritySummary": {
+      "additionalProperties": false,
+      "properties": {
+        "CRITICAL": {
+          "default": 0,
+          "title": "Critical",
+          "type": "integer"
+        },
+        "HIGH": {
+          "default": 0,
+          "title": "High",
+          "type": "integer"
+        },
+        "MEDIUM": {
+          "default": 0,
+          "title": "Medium",
+          "type": "integer"
+        },
+        "LOW": {
+          "default": 0,
+          "title": "Low",
+          "type": "integer"
+        }
+      },
+      "title": "SeveritySummary",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "kubernetes_live",
+        "manifest",
+        "terraform_plan",
+        "aws",
+        "gcp"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    },
+    "ValidatorRun": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Version"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "number"
+        },
+        "resources_checked": {
+          "title": "Resources Checked",
+          "type": "integer"
+        },
+        "findings": {
+          "title": "Findings",
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "name",
+        "duration_ms",
+        "resources_checked",
+        "findings"
+      ],
+      "title": "ValidatorRun",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tool": {
+      "const": "infraguard",
+      "default": "infraguard",
+      "title": "Tool",
+      "type": "string"
+    },
+    "tool_version": {
+      "title": "Tool Version",
+      "type": "string"
+    },
+    "scan_id": {
+      "title": "Scan Id",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "duration_ms": {
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "targets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Targets",
+      "type": "array"
+    },
+    "fail_on": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Severity"
+        },
+        {
+          "const": "NONE",
+          "type": "string"
+        }
+      ],
+      "title": "Fail On"
+    },
+    "summary": {
+      "$ref": "#/$defs/ScanSummary"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "validators": {
+      "items": {
+        "$ref": "#/$defs/ValidatorRun"
+      },
+      "title": "Validators",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tool_version",
+    "scan_id",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "targets",
+    "fail_on",
+    "summary",
+    "findings",
+    "validators"
+  ],
+  "title": "ScanReport",
+  "type": "object"
+}

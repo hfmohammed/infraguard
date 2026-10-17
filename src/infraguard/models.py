@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,7 +16,7 @@ class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
@@ -28,7 +28,7 @@ class Severity(str, Enum):
         return {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}[self.value]
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     KUBERNETES_LIVE = "kubernetes_live"
     MANIFEST = "manifest"
     TERRAFORM_PLAN = "terraform_plan"
@@ -36,7 +36,7 @@ class SourceType(str, Enum):
     GCP = "gcp"
 
 
-class Category(str, Enum):
+class Category(StrEnum):
     SECURITY = "security"
     RELIABILITY = "reliability"
     NETWORK = "network"
@@ -159,4 +159,3 @@ class PolicyMeta(FrozenModel):
     description: str
     remediation: str
     fixture: str
-
