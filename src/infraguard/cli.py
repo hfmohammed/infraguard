@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import typer
+import yaml
 from rich.console import Console
 
 from infraguard import __version__
@@ -16,8 +17,13 @@ from infraguard.collectors.manifests import ManifestCollector
 from infraguard.collectors.terraform_plan import TerraformPlanCollector
 from infraguard.engine import run_scan
 from infraguard.errors import InfraGuardError
+from infraguard.mcp_server.server import configure as configure_mcp
+from infraguard.mcp_server.server import serve as serve_mcp
 from infraguard.models import ScanReport, Severity
 from infraguard.policies.catalog import PolicyCatalog
+from infraguard.remediation.approval import request_approval
+from infraguard.remediation.models import RemediationProposal
+from infraguard.remediation.pipeline import validate_proposal
 from infraguard.reporting.json_report import render_json, write_json
 from infraguard.reporting.markdown_report import render_markdown, write_markdown
 from infraguard.reporting.metrics import write_metrics
@@ -28,8 +34,13 @@ app = typer.Typer(
     help="Validate Kubernetes and Terraform infrastructure safely.", no_args_is_help=True
 )
 policies_app = typer.Typer(help="Inspect the policy catalog.")
+mcp_app = typer.Typer(help="Serve read-only infrastructure tools.")
+remediate_app = typer.Typer(help="Validate guarded remediation proposals.")
 app.add_typer(policies_app, name="policies")
+app.add_typer(mcp_app, name="mcp")
+app.add_typer(remediate_app, name="remediate")
 console = Console()
+DEFAULT_ROOT = Path.cwd()
 
 
 def version_callback(value: bool) -> None:
@@ -163,6 +174,54 @@ def list_policies(format: Annotated[str, typer.Option()] = "table") -> None:
     else:
         for policy in policies:
             typer.echo(f"{policy.severity.value:8} {policy.id:16} {policy.title}")
+
+
+@mcp_app.command("serve")
+def mcp_serve(
+    transport: Annotated[str, typer.Option()] = "stdio",
+    context: Annotated[str | None, typer.Option()] = None,
+    allowed_root: Annotated[Path, typer.Option()] = DEFAULT_ROOT,
+) -> None:
+    """Start the read-only MCP server."""
+    configure_mcp(allowed_root=allowed_root, context=context)
+    if transport not in {"stdio", "sse", "streamable-http"}:
+        raise typer.BadParameter("transport must be stdio, sse, or streamable-http")
+    serve_mcp(cast(Literal["stdio", "sse", "streamable-http"], transport))
+
+
+def _load_proposal(path: Path) -> RemediationProposal:
+    raw = yaml.safe_load(path.read_text())
+    return RemediationProposal.model_validate(raw)
+
+
+@remediate_app.command("check")
+def remediate_check(proposal_yaml: Path) -> None:
+    """Run the fail-closed proposal identity and scope checks."""
+    step = validate_proposal(_load_proposal(proposal_yaml))
+    typer.echo(step.model_dump_json(indent=2))
+    if step.result == "fail":
+        raise typer.Exit(1)
+
+
+@remediate_app.command("apply")
+def remediate_apply(proposal_yaml: Path) -> None:
+    """Require interactive approval after validating a proposal."""
+    proposal = _load_proposal(proposal_yaml)
+    step = validate_proposal(proposal)
+    if step.result == "fail":
+        typer.echo(step.detail)
+        raise typer.Exit(1)
+    try:
+        approved = request_approval(proposal.target.name)
+    except RuntimeError as error:
+        typer.echo(str(error))
+        raise typer.Exit(4) from error
+    if not approved:
+        typer.echo("remediation rejected")
+        raise typer.Exit(4)
+    typer.echo(
+        "approval recorded; use the Kubernetes client integration to perform server-side apply"
+    )
 
 
 def main() -> None:
