@@ -87,7 +87,7 @@ class KubernetesLiveCollector:
                 raw = api_client.sanitize_for_serialization(item)
                 namespace = raw.get("metadata", {}).get("namespace") if namespaced else None
                 if namespace in self.exclude_namespaces or (
-                    self.namespaces and namespace not in self.namespaces
+                    namespaced and self.namespaces and namespace not in self.namespaces
                 ):
                     continue
                 owners = raw.get("metadata", {}).get("ownerReferences", [])
