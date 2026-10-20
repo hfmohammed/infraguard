@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
-export PATH := $(CURDIR)/bin:$(CURDIR)/.venv/bin:$(PATH)
+PATH := $(CURDIR)/bin:$(CURDIR)/.venv/bin:$(PATH)
+export PATH
 PYTHON := .venv/bin/python
 
 .PHONY: help setup cluster-up cluster-down deploy-samples lint fmt test test-integration test-all schema docs validate scan metrics-record dashboards-up dashboards-down clean
@@ -28,21 +29,21 @@ deploy-samples: ## deploy compliant and deliberately noncompliant charts
 	kubectl rollout status deployment/compliant-app -n ig-compliant --timeout=120s
 
 lint: ## run formatting, static analysis, and repository safety checks
-	ruff check .
-	ruff format --check .
-	mypy --strict src
+	.venv/bin/ruff check .
+	.venv/bin/ruff format --check .
+	.venv/bin/mypy --strict src
 	./scripts/check_no_plans.sh
 
 fmt: ## format Python and Terraform sources
-	ruff format .
+	.venv/bin/ruff format .
 	@if command -v terraform >/dev/null; then terraform fmt -recursive samples/terraform; fi
 
 test: ## run offline tests
 	@if command -v opa >/dev/null; then opa test policies/kubernetes/*.rego policies/terraform/*.rego -v; else echo "opa unavailable: Rego tests skipped"; fi
-	pytest -m 'not integration' --cov=infraguard --cov-report=term-missing
+	.venv/bin/pytest -m 'not integration' --cov=infraguard --cov-report=term-missing
 
 test-integration: ## run tests requiring kind
-	pytest -m integration --timeout=300
+	.venv/bin/pytest -m integration --timeout=300
 
 test-all: test test-integration ## run all tests
 
@@ -50,14 +51,14 @@ schema: ## regenerate the JSON report schema
 	$(PYTHON) scripts/generate_schema.py
 
 docs: ## regenerate policy documentation
-	infraguard policies list --format md > docs/POLICIES.md
+	.venv/bin/infraguard policies list --format md > docs/POLICIES.md
 
 validate: ## validate all compliant examples
-	infraguard validate samples/manifests/compliant --fail-on LOW
-	infraguard validate --helm-chart samples/charts/compliant-app --fail-on LOW
+	.venv/bin/infraguard validate samples/manifests/compliant --fail-on LOW
+	.venv/bin/infraguard validate --helm-chart samples/charts/compliant-app --fail-on LOW
 
 scan: ## run the full noncompliant demonstration scan
-	infraguard validate samples/manifests/noncompliant --plan-json samples/terraform/plan-fixtures/noncompliant.plan.fixture.json --fail-on NONE --format table --format json --format markdown --metrics-file reports/metrics.prom
+	.venv/bin/infraguard validate samples/manifests/noncompliant --plan-json samples/terraform/plan-fixtures/noncompliant.plan.fixture.json --fail-on NONE --format table --format json --format markdown --metrics-file reports/metrics.prom
 
 metrics-record: ## print reproducible repository metrics
 	$(PYTHON) scripts/record_metrics.py
