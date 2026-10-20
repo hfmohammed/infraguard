@@ -1,0 +1,22 @@
+- {policy_id: K8S-SEC-001, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-002, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-003, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-004, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-005, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-006, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-SEC-007, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-REL-001, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-REL-002, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-REL-003, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-REL-004, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: K8S-NET-001, resource_key: ig-noncompliant/Service/exposed-svc}
+- {policy_id: K8S-NET-002, resource_key: ig-noncompliant/Deployment/vulnerable-app}
+- {policy_id: TF-AWS-NET-001, resource_key: aws_security_group.ssh_open}
+- {policy_id: TF-AWS-NET-002, resource_key: aws_security_group.wide_open}
+- {policy_id: TF-AWS-S3-001, resource_key: aws_s3_bucket.raw_logs}
+- {policy_id: TF-AWS-S3-002, resource_key: aws_s3_bucket.raw_logs}
+- {policy_id: TF-AWS-S3-003, resource_key: aws_s3_bucket.raw_logs}
+- {policy_id: TF-AWS-IAM-001, resource_key: aws_iam_policy.admin_everything}
+- {policy_id: TF-PLAN-001, resource_key: aws_db_instance.main}
+- {policy_id: TF-PLAN-002, resource_key: aws_db_instance.main}
+

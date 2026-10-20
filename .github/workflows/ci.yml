@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -e '.[dev]'
+      - run: make lint
+      - uses: gitleaks/gitleaks-action@v2
+
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python }}", cache: pip}
+      - run: pip install -e '.[dev]'
+      - run: pytest -m 'not integration' --cov=infraguard --cov-report=xml --cov-fail-under=85
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python }}
+          path: coverage.xml
+
+  validate-iac:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - uses: azure/setup-helm@v4
+        with: {version: v3.15.3}
+      - uses: hashicorp/setup-terraform@v3
+        with: {terraform_version: 1.8.5}
+      - run: pip install -e '.[dev]'
+      - run: helm lint samples/charts/compliant-app samples/charts/noncompliant-app
+      - run: terraform fmt -check -recursive samples/terraform
+      - run: infraguard validate samples/manifests/compliant --fail-on LOW
+      - name: Prove the negative gate
+        run: |
+          set +e
+          infraguard validate samples/manifests/noncompliant >/tmp/negative-gate.log 2>&1
+          code=$?
+          test "$code" -eq 1
+
+  integration:
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - uses: azure/setup-helm@v4
+        with: {version: v3.15.3}
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: infraguard
+          config: cluster/kind-config.yaml
+          node_image: kindest/node:v1.30.2
+      - run: pip install -e '.[dev]'
+      - run: make deploy-samples
+      - run: pytest -m integration --timeout=300
+      - run: infraguard scan --context kind-infraguard -n ig-compliant --fail-on LOW --format json --format markdown --metrics-file reports/metrics.prom
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-reports
+          path: reports/
+

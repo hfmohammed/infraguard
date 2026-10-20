@@ -1,0 +1,13 @@
+proposal_id: bad-retarget
+finding_fingerprint: demo
+policy_id: K8S-SEC-001
+target: {source: kubernetes_live, kind: Deployment, name: vulnerable-app, namespace: ig-noncompliant}
+proposed_manifest:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: another-app, namespace: ig-noncompliant}
+  spec: {}
+rationale: This deliberately attempts to target another object.
+proposer: external_ai
+created_at: 2026-10-20T12:00:00Z
+

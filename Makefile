@@ -3,7 +3,7 @@ SHELL := /bin/bash
 export PATH := $(CURDIR)/bin:$(CURDIR)/.venv/bin:$(PATH)
 PYTHON := .venv/bin/python
 
-.PHONY: help setup cluster-up cluster-down deploy-samples lint fmt test test-integration test-all schema docs validate scan clean
+.PHONY: help setup cluster-up cluster-down deploy-samples lint fmt test test-integration test-all schema docs validate scan metrics-record dashboards-up dashboards-down clean
 help: ## list available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -38,7 +38,7 @@ fmt: ## format Python and Terraform sources
 	@if command -v terraform >/dev/null; then terraform fmt -recursive samples/terraform; fi
 
 test: ## run offline tests
-	@if command -v opa >/dev/null; then opa test policies/ -v; else echo "opa unavailable: Rego tests skipped"; fi
+	@if command -v opa >/dev/null; then opa test policies/kubernetes/*.rego policies/terraform/*.rego -v; else echo "opa unavailable: Rego tests skipped"; fi
 	pytest -m 'not integration' --cov=infraguard --cov-report=term-missing
 
 test-integration: ## run tests requiring kind
@@ -58,6 +58,15 @@ validate: ## validate all compliant examples
 
 scan: ## run the full noncompliant demonstration scan
 	infraguard validate samples/manifests/noncompliant --plan-json samples/terraform/plan-fixtures/noncompliant.plan.fixture.json --fail-on NONE --format table --format json --format markdown --metrics-file reports/metrics.prom
+
+metrics-record: ## print reproducible repository metrics
+	$(PYTHON) scripts/record_metrics.py
+
+dashboards-up: ## start optional Prometheus and Grafana services
+	docker compose -f dashboards/docker-compose.yml up -d
+
+dashboards-down: ## stop optional observability services
+	docker compose -f dashboards/docker-compose.yml down
 
 clean: ## remove generated local output
 	rm -rf reports audit .cache .coverage htmlcov

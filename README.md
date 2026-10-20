@@ -80,7 +80,7 @@ Severity  Policy           Resource                                  Message
 CRITICAL  K8S-SEC-001      ig-noncompliant/Deployment/vulnerable-app container 'app' runs privileged
 CRITICAL  TF-AWS-NET-001   aws_security_group.ssh_open               SSH ingress is open to the world
 CRITICAL  TF-AWS-S3-001    aws_s3_bucket.raw_logs                    bucket does not block all public access
-PASSED: 6 resources, 21 seeded policy findings (--fail-on NONE)
+PASSED: 6 resources, 19 seeded policy findings (--fail-on NONE)
 ```
 
 The Markdown report groups findings by severity and includes validator timing, resources checked, remediation guidance, and a stable resource key.
