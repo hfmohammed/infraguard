@@ -44,7 +44,9 @@ class KubeconformValidator:
                 ],
                 ok_codes=(0, 1),
             )
-            for item in json.loads(result.stdout or "[]"):
+            payload = json.loads(result.stdout or "{}")
+            items = payload.get("resources", []) if isinstance(payload, dict) else payload
+            for item in items:
                 if item.get("status") not in {"statusInvalid", "statusError"}:
                     continue
                 matched = lookup.get(item.get("filename"))

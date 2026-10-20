@@ -35,7 +35,16 @@ def test_kubeconform_maps_invalid_result(monkeypatch) -> None:
         filename = str(Path(command[-1]) / "0.yaml")
         return SimpleNamespace(
             stdout=json.dumps(
-                [{"filename": filename, "status": "statusInvalid", "msg": "bad field"}]
+                {
+                    "resources": [
+                        {
+                            "filename": filename,
+                            "status": "statusInvalid",
+                            "msg": "bad field",
+                        }
+                    ],
+                    "summary": {"valid": 0, "invalid": 1, "errors": 0, "skipped": 0},
+                }
             )
         )
 

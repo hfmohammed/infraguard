@@ -40,29 +40,50 @@ jobs:
           path: coverage.xml
 
   validate-iac:
-    needs: lint
+    needs: [lint, unit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
-      - uses: azure/setup-helm@v4
-        with: {version: v3.15.3}
-      - uses: hashicorp/setup-terraform@v3
-        with: {terraform_version: 1.8.5}
       - run: pip install -e '.[dev]'
-      - run: helm lint samples/charts/compliant-app samples/charts/noncompliant-app
-      - run: terraform fmt -check -recursive samples/terraform
-      - run: infraguard validate samples/manifests/compliant --fail-on LOW
+      - name: Install the pinned validation toolchain
+        run: ./scripts/install-tools.sh
+      - name: Test Rego policies
+        run: ./bin/opa test policies/kubernetes/*.rego policies/terraform/*.rego -v
+      - name: Validate Helm charts and rendered schemas
+        run: |
+          ./bin/helm lint samples/charts/compliant-app samples/charts/noncompliant-app
+          ./bin/helm template compliant samples/charts/compliant-app | ./bin/kubeconform -strict -summary -kubernetes-version 1.30.0
+          ./bin/helm template noncompliant samples/charts/noncompliant-app | ./bin/kubeconform -strict -summary -kubernetes-version 1.30.0
+      - name: Validate Terraform modules
+        run: |
+          ./bin/terraform fmt -check -recursive samples/terraform
+          ./bin/terraform -chdir=samples/terraform/compliant init -backend=false
+          ./bin/terraform -chdir=samples/terraform/compliant validate
+          ./bin/terraform -chdir=samples/terraform/noncompliant init -backend=false
+          ./bin/terraform -chdir=samples/terraform/noncompliant validate
+      - name: Prove Conftest policy gates
+        run: |
+          ./bin/conftest test samples/manifests/compliant --policy policies/kubernetes --namespace infraguard.kubernetes
+          if ./bin/conftest test samples/manifests/noncompliant --policy policies/kubernetes --namespace infraguard.kubernetes; then
+            echo "expected noncompliant manifests to fail policy validation" >&2
+            exit 1
+          fi
+          if ./bin/conftest test samples/terraform/plan-fixtures/noncompliant.plan.fixture.json --policy policies/terraform --namespace infraguard.terraform; then
+            echo "expected noncompliant Terraform plan to fail policy validation" >&2
+            exit 1
+          fi
+      - run: python -m infraguard validate samples/manifests/compliant --fail-on LOW
       - name: Prove the negative gate
         run: |
           set +e
-          infraguard validate samples/manifests/noncompliant >/tmp/negative-gate.log 2>&1
+          python -m infraguard validate samples/manifests/noncompliant >/tmp/negative-gate.log 2>&1
           code=$?
           test "$code" -eq 1
 
   integration:
-    needs: unit
+    needs: [unit, validate-iac]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
