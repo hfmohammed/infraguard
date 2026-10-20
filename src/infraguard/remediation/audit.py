@@ -9,7 +9,17 @@ import socket
 from datetime import UTC, datetime
 from pathlib import Path
 
+from prometheus_client import CollectorRegistry, Counter
+
 from infraguard.remediation.models import RemediationProposal, StepResult
+
+REGISTRY = CollectorRegistry()
+PIPELINE = Counter(
+    "infraguard_remediation_pipeline_total",
+    "Remediation gate outcomes",
+    ["step", "result"],
+    registry=REGISTRY,
+)
 
 
 def append_step(
@@ -36,3 +46,4 @@ def append_step(
     }
     with path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(record, sort_keys=True) + "\n")
+    PIPELINE.labels(step.step, step.result).inc()

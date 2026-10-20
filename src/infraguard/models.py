@@ -126,6 +126,7 @@ class SeveritySummary(FrozenModel):
 class ScanSummary(FrozenModel):
     resources_scanned: int
     resources_by_source: dict[str, int]
+    resources_by_kind: dict[str, dict[str, int]] = Field(default_factory=dict)
     findings_total: int
     by_severity: SeveritySummary
     by_policy: dict[str, int]
@@ -141,6 +142,7 @@ class ScanReport(FrozenModel):
     started_at: datetime
     finished_at: datetime
     duration_ms: float
+    phase_durations_ms: dict[str, float] = Field(default_factory=dict)
     targets: list[str]
     fail_on: Severity | Literal["NONE"]
     summary: ScanSummary

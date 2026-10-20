@@ -166,6 +166,16 @@
           "title": "Resources By Source",
           "type": "object"
         },
+        "resources_by_kind": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "title": "Resources By Kind",
+          "type": "object"
+        },
         "findings_total": {
           "title": "Findings Total",
           "type": "integer"
@@ -338,6 +348,13 @@
     "duration_ms": {
       "title": "Duration Ms",
       "type": "number"
+    },
+    "phase_durations_ms": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Phase Durations Ms",
+      "type": "object"
     },
     "targets": {
       "items": {

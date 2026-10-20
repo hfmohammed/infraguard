@@ -37,6 +37,31 @@ class TerraformPlanCollector:
         """Return the redacted plan, loading or generating it once."""
         if self._plan is None:
             self._plan = self._load_plan()
+            references: dict[str, dict[str, Any]] = {}
+
+            def visit(module: dict[str, Any], prefix: str = "") -> None:
+                for entry in module.get("resources", []):
+                    references[prefix + entry["address"]] = {
+                        name: expression.get("references", [])
+                        for name, expression in entry.get("expressions", {}).items()
+                        if isinstance(expression, dict)
+                    }
+                for name, call in module.get("module_calls", {}).items():
+                    visit(call.get("module", {}), f"{prefix}module.{name}.")
+
+            visit(self._plan.get("configuration", {}).get("root_module", {}))
+            for resource in self._plan.get("resource_changes", []):
+                resource["_references"] = references.get(resource["address"], {})
+                change = resource.get("change", {})
+                for phase in ("before", "after"):
+                    change[phase] = redact_sensitive(
+                        change.get(phase), change.get(f"{phase}_sensitive", False)
+                    )
+            for output in self._plan.get("output_changes", {}).values():
+                for phase in ("before", "after"):
+                    output[phase] = redact_sensitive(
+                        output.get(phase), output.get(f"{phase}_sensitive", False)
+                    )
         return self._plan
 
     def changes(self) -> list[TerraformChange]:
@@ -87,7 +112,11 @@ class TerraformPlanCollector:
         with tempfile.TemporaryDirectory(prefix="infraguard-tf-") as temporary:
             root = Path(temporary)
             work = root / "module"
-            shutil.copytree(self.tf_dir, work)
+            shutil.copytree(
+                self.tf_dir,
+                work,
+                ignore=shutil.ignore_patterns(".terraform", "*.tfstate*", "*.tfplan"),
+            )
             environment = os.environ.copy()
             environment.update(
                 AWS_ACCESS_KEY_ID="mock",
@@ -96,29 +125,30 @@ class TerraformPlanCollector:
                 TF_DATA_DIR=str(root / "data"),
                 TF_PLUGIN_CACHE_DIR=str(Path.cwd() / ".cache" / "terraform-plugins"),
             )
-            # The shared runner deliberately owns command construction; environment is
-            # set only for this process by temporarily updating os.environ.
-            previous = os.environ.copy()
-            try:
-                os.environ.update(environment)
-                run(["terraform", "init", "-backend=false", "-input=false"], cwd=work, timeout=300)
-                plan_path = root / "tfplan"
-                run(
-                    [
-                        "terraform",
-                        "plan",
-                        "-input=false",
-                        "-lock=false",
-                        "-refresh=false",
-                        f"-out={plan_path}",
-                    ],
-                    cwd=work,
-                    timeout=300,
-                )
-                output = run(["terraform", "show", "-json", str(plan_path)], cwd=work).stdout
-            finally:
-                os.environ.clear()
-                os.environ.update(previous)
+            Path(environment["TF_PLUGIN_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+            run(
+                ["terraform", "init", "-backend=false", "-input=false"],
+                cwd=work,
+                timeout=300,
+                env=environment,
+            )
+            plan_path = root / "tfplan"
+            run(
+                [
+                    "terraform",
+                    "plan",
+                    "-input=false",
+                    "-lock=false",
+                    "-refresh=false",
+                    f"-out={plan_path}",
+                ],
+                cwd=work,
+                timeout=300,
+                env=environment,
+            )
+            output = run(
+                ["terraform", "show", "-json", str(plan_path)], cwd=work, env=environment
+            ).stdout
             generated = json.loads(output)
             if not isinstance(generated, dict):
                 raise ValueError("Terraform output must be a JSON object")

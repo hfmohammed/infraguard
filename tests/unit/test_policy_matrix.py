@@ -59,7 +59,8 @@ def test_each_kubernetes_policy_has_a_seeded_finding(policy_id, kubernetes_findi
 @pytest.mark.parametrize("policy_id", TERRAFORM_IDS)
 def test_each_terraform_policy_has_a_seeded_finding(policy_id, terraform_findings) -> None:
     matches = [item for item in terraform_findings if item.policy_id == policy_id]
-    assert len(matches) == 1
+    # Both the SSH range and the all-protocol rule expose SSH to the world.
+    assert len(matches) == (2 if policy_id == "TF-AWS-NET-001" else 1)
     assert matches[0].resource.address
 
 

@@ -45,6 +45,24 @@ def test_json_round_trip_and_write(tmp_path: Path) -> None:
     output = tmp_path / "nested" / "report.json"
     write_json(report, output)
     assert output.exists()
+    import json
+
+    import jsonschema
+
+    schema = json.loads(Path("src/infraguard/reporting/schema/scan_report.schema.json").read_text())
+    jsonschema.validate(json.loads(output.read_text()), schema)
+
+
+def test_reports_are_stable_after_removing_execution_metadata() -> None:
+    def normalized():
+        payload = sample_report().model_dump(mode="json")
+        for key in ("scan_id", "started_at", "finished_at", "duration_ms", "phase_durations_ms"):
+            payload.pop(key)
+        for execution in payload["validators"]:
+            execution.pop("duration_ms")
+        return payload
+
+    assert normalized() == normalized()
 
 
 def test_markdown_groups_findings_and_writes(tmp_path: Path) -> None:

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from io import StringIO
 from pathlib import Path
+from threading import Event
 from typing import Annotated, Literal, cast
 
 import typer
 import yaml
+from prometheus_client import generate_latest
 from rich.console import Console
 
 from infraguard import __version__
@@ -26,9 +29,9 @@ from infraguard.remediation.pipeline import apply_proposal, check_proposal
 from infraguard.remediation.proposer import propose
 from infraguard.reporting.json_report import render_json, write_json
 from infraguard.reporting.markdown_report import render_markdown, write_markdown
-from infraguard.reporting.metrics import write_metrics
+from infraguard.reporting.metrics import registry_for, serve_metrics, write_metrics
 from infraguard.reporting.table import print_table
-from infraguard.validators.native import NativePolicyValidator
+from infraguard.validators.registry import build_validators
 
 app = typer.Typer(
     help="Validate Kubernetes and Terraform infrastructure safely.", no_args_is_help=True
@@ -57,8 +60,13 @@ def root(
     """Run InfraGuard."""
 
 
-def _severity(value: str) -> Severity | str:
-    return "NONE" if value == "NONE" else Severity(value)
+def _severity(value: str) -> Severity | Literal["NONE"]:
+    try:
+        return "NONE" if value == "NONE" else Severity(value)
+    except ValueError as error:
+        raise typer.BadParameter(
+            "--fail-on must be CRITICAL, HIGH, MEDIUM, LOW, or NONE"
+        ) from error
 
 
 def _emit(
@@ -89,23 +97,44 @@ def validate(
     helm_chart: Annotated[Path | None, typer.Option()] = None,
     values: Annotated[list[Path] | None, typer.Option()] = None,
     plan_json: Annotated[Path | None, typer.Option()] = None,
+    terraform_dir: Annotated[Path | None, typer.Option()] = None,
+    policy_dir: Annotated[Path | None, typer.Option()] = None,
+    schema_only: Annotated[bool, typer.Option()] = False,
+    policy_only: Annotated[bool, typer.Option()] = False,
     fail_on: Annotated[str, typer.Option()] = "HIGH",
     format: Annotated[list[str] | None, typer.Option("--format")] = None,
     output_dir: Annotated[Path, typer.Option()] = Path("reports"),
     metrics_file: Annotated[Path | None, typer.Option()] = None,
+    offline: Annotated[
+        bool, typer.Option(help="Use native policies without external schema checks.")
+    ] = False,
+    serve_metrics_port: Annotated[
+        int | None, typer.Option("--serve-metrics", min=1, max=65535)
+    ] = None,
+    metrics_host: Annotated[str, typer.Option()] = "127.0.0.1",
 ) -> None:
     """Validate manifests, a Helm chart, and/or an existing Terraform plan."""
     collectors: list[Collector] = []
     if paths or helm_chart:
         collectors.append(ManifestCollector(paths or [], helm_chart, values or []))
-    if plan_json:
-        collectors.append(TerraformPlanCollector(plan_json=plan_json))
+    if schema_only and (policy_only or offline):
+        raise typer.BadParameter("--schema-only cannot be combined with --policy-only or --offline")
+    if plan_json and terraform_dir:
+        raise typer.BadParameter("provide --plan-json or --terraform-dir, not both")
+    if plan_json or terraform_dir:
+        collectors.append(TerraformPlanCollector(plan_json=plan_json, tf_dir=terraform_dir))
     if not collectors:
         raise typer.BadParameter("provide a YAML path, --helm-chart, or --plan-json")
-    catalog = PolicyCatalog.load()
+    catalog = PolicyCatalog.load(policy_dir / "metadata.yaml" if policy_dir else None)
+    validators = build_validators(
+        catalog, offline=offline, policy_root=policy_dir, skip_schema=policy_only
+    )
+    if schema_only:
+        validators = [validator for validator in validators if validator.name == "kubeconform"]
     try:
-        report = run_scan(collectors, [NativePolicyValidator(catalog)], _severity(fail_on), catalog)  # type: ignore[arg-type]
+        report = run_scan(collectors, validators, _severity(fail_on), catalog)
         _emit(report, format or ["table"], output_dir, metrics_file)
+        _serve(report, serve_metrics_port, metrics_host)
     except InfraGuardError as error:
         console.print(f"[red]ERROR:[/red] {error}")
         raise typer.Exit(3) from error
@@ -120,23 +149,42 @@ def scan(
     namespace: Annotated[list[str] | None, typer.Option("--namespace", "-n")] = None,
     terraform_dir: Annotated[Path | None, typer.Option()] = None,
     plan_json: Annotated[Path | None, typer.Option()] = None,
+    policy_dir: Annotated[Path | None, typer.Option()] = None,
+    skip_schema: Annotated[bool, typer.Option()] = False,
     fail_on: Annotated[str, typer.Option()] = "HIGH",
     format: Annotated[list[str] | None, typer.Option("--format")] = None,
     output_dir: Annotated[Path, typer.Option()] = Path("reports"),
     metrics_file: Annotated[Path | None, typer.Option()] = None,
+    offline: Annotated[
+        bool, typer.Option(help="Use native policies without external schema checks.")
+    ] = False,
+    serve_metrics_port: Annotated[
+        int | None, typer.Option("--serve-metrics", min=1, max=65535)
+    ] = None,
+    metrics_host: Annotated[str, typer.Option()] = "127.0.0.1",
 ) -> None:
     """Scan a live cluster and/or Terraform plan."""
     collectors: list[Collector] = []
+    if plan_json and terraform_dir:
+        raise typer.BadParameter("provide --plan-json or --terraform-dir, not both")
     if cluster:
         collectors.append(KubernetesLiveCollector(context, namespace))
     if terraform_dir or plan_json:
         collectors.append(TerraformPlanCollector(plan_json=plan_json, tf_dir=terraform_dir))
     if not collectors:
         raise typer.BadParameter("at least one scan target is required")
-    catalog = PolicyCatalog.load()
+    catalog = PolicyCatalog.load(policy_dir / "metadata.yaml" if policy_dir else None)
     try:
-        result = run_scan(collectors, [NativePolicyValidator(catalog)], _severity(fail_on), catalog)  # type: ignore[arg-type]
+        result = run_scan(
+            collectors,
+            build_validators(
+                catalog, offline=offline, policy_root=policy_dir, skip_schema=skip_schema
+            ),
+            _severity(fail_on),
+            catalog,
+        )
         _emit(result, format or ["table"], output_dir, metrics_file)
+        _serve(result, serve_metrics_port, metrics_host)
     except InfraGuardError as error:
         console.print(f"[red]ERROR:[/red] {error}")
         raise typer.Exit(3) from error
@@ -144,15 +192,45 @@ def scan(
         raise typer.Exit(1)
 
 
+def _serve(report: ScanReport, port: int | None, host: str) -> None:
+    if port is None:
+        return
+    server, thread = serve_metrics(report, port=port, host=host)
+    typer.echo(f"Metrics: http://{host}:{server.server_port}/metrics (Ctrl-C to stop)")
+    try:
+        Event().wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 @app.command()
 def report(
     report_json: Path,
     format: Annotated[str, typer.Option()] = "markdown",
     output: Annotated[Path | None, typer.Option()] = None,
+    min_severity: Annotated[Severity, typer.Option()] = Severity.LOW,
 ) -> None:
     """Re-render a saved JSON report."""
     model = ScanReport.model_validate_json(report_json.read_text())
-    rendered = render_json(model) if format == "json" else render_markdown(model)
+    filtered = model.model_copy(
+        update={"findings": [f for f in model.findings if f.severity.rank >= min_severity.rank]}
+    )
+    if format == "json":
+        rendered = render_json(filtered)
+    elif format == "markdown":
+        rendered = render_markdown(model, min_severity)
+    elif format == "prometheus":
+        rendered = generate_latest(registry_for(model)).decode()
+    elif format == "table":
+        buffer = StringIO()
+        print_table(filtered, Console(file=buffer, width=120))
+        rendered = buffer.getvalue()
+    else:
+        raise typer.BadParameter("--format must be markdown, table, json, or prometheus")
     if output:
         output.write_text(rendered)
     else:
@@ -181,9 +259,13 @@ def mcp_serve(
     transport: Annotated[str, typer.Option()] = "stdio",
     context: Annotated[str | None, typer.Option()] = None,
     allowed_root: Annotated[Path, typer.Option()] = DEFAULT_ROOT,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8765,
 ) -> None:
     """Start the read-only MCP server."""
     configure_mcp(allowed_root=allowed_root, context=context)
+    from infraguard.mcp_server.server import mcp
+
+    mcp.settings.port = port
     if transport not in {"stdio", "sse", "streamable-http"}:
         raise typer.BadParameter("transport must be stdio, sse, or streamable-http")
     serve_mcp(cast(Literal["stdio", "sse", "streamable-http"], transport))

@@ -9,7 +9,7 @@ from time import perf_counter
 
 import yaml
 
-from infraguard.models import Category, Finding, Resource, Severity, ValidatorRun
+from infraguard.models import Category, Finding, Resource, Severity, SourceType, ValidatorRun
 from infraguard.utils.tools import run
 
 
@@ -21,7 +21,11 @@ class KubeconformValidator:
     def validate(self, resources: list[Resource]) -> tuple[list[Finding], ValidatorRun]:
         """Run kubeconform and map invalid documents to SCHEMA-001."""
         started = perf_counter()
+        resources = [r for r in resources if r.ref.source != SourceType.TERRAFORM_PLAN]
+        if not resources:
+            return [], ValidatorRun(name=self.name, duration_ms=0, resources_checked=0, findings=0)
         findings: list[Finding] = []
+        Path(".cache/kubeconform").mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="infraguard-schema-") as temporary:
             root = Path(temporary)
             lookup: dict[str, Resource] = {}
@@ -40,6 +44,8 @@ class KubeconformValidator:
                     "1.30.0",
                     "-skip",
                     "CustomResourceDefinition",
+                    "-cache",
+                    str(Path(".cache/kubeconform").resolve()),
                     str(root),
                 ],
                 ok_codes=(0, 1),

@@ -313,7 +313,10 @@ class NativePolicyValidator:
                     cidrs += [rule.get("cidr_ipv4"), rule.get("cidr_ipv6")]
                     world = any(cidr in {"0.0.0.0/0", "::/0"} for cidr in cidrs)
                     low, high = rule.get("from_port", 0), rule.get("to_port", 0)
-                    if world and low <= 22 <= high:
+                    if world and (
+                        rule.get("protocol") == "-1"
+                        or (rule.get("protocol") == "tcp" and low <= 22 <= high)
+                    ):
                         output.append(
                             self._finding(
                                 "TF-AWS-NET-001",
@@ -339,8 +342,10 @@ class NativePolicyValidator:
                     policy = {}
                 if any(
                     statement.get("Effect") == "Allow"
-                    and statement.get("Action") == "*"
-                    and statement.get("Resource") == "*"
+                    and (statement.get("Action") == "*" or "*" in (statement.get("Action") or []))
+                    and (
+                        statement.get("Resource") == "*" or "*" in (statement.get("Resource") or [])
+                    )
                     for statement in policy.get("Statement", [])
                 ):
                     output.append(
@@ -352,6 +357,8 @@ class NativePolicyValidator:
                         )
                     )
         for bucket in buckets:
+            if bucket.raw.get("change", {}).get("after") is None:
+                continue
             bucket_id = (bucket.raw.get("change", {}).get("after") or {}).get("bucket")
 
             def matches(
@@ -359,10 +366,14 @@ class NativePolicyValidator:
                 expected: Any = bucket_id,
                 address: str | None = bucket.ref.address,
             ) -> bool:
-                return (candidate.raw.get("change", {}).get("after") or {}).get("bucket") in {
-                    expected,
-                    address,
-                }
+                after = candidate.raw.get("change", {}).get("after")
+                if after is None:
+                    return False
+                value = after.get("bucket")
+                references = candidate.raw.get("_references", {}).get("bucket", [])
+                return (value is not None and value in {expected, address}) or any(
+                    ref == address or ref.startswith(f"{address}.") for ref in references
+                )
 
             blocks = [item for item in access_blocks if matches(item)]
             public = not blocks or any(

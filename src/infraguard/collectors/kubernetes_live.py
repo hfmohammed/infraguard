@@ -11,6 +11,7 @@ from kubernetes.client.exceptions import ApiException
 from kubernetes.config.config_exception import ConfigException
 
 from infraguard.errors import ClusterUnreachableError
+from infraguard.mcp_server.readonly import ReadOnlyK8s
 from infraguard.models import Resource, ResourceRef, SourceType
 from infraguard.utils.redact import redact_manifest
 
@@ -44,10 +45,10 @@ class KubernetesLiveCollector:
             except ConfigException:
                 config.load_incluster_config()
             core, apps, batch, networking = (
-                client.CoreV1Api(),
-                client.AppsV1Api(),
-                client.BatchV1Api(),
-                client.NetworkingV1Api(),
+                ReadOnlyK8s(client.CoreV1Api()),
+                ReadOnlyK8s(client.AppsV1Api()),
+                ReadOnlyK8s(client.BatchV1Api()),
+                ReadOnlyK8s(client.NetworkingV1Api()),
             )
             calls = [
                 (core.list_namespace, "Namespace", "v1", False),

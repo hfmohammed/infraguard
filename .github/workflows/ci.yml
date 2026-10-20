@@ -33,6 +33,13 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "${{ matrix.python }}", cache: pip}
       - run: pip install -e '.[dev]'
+      - name: Build and smoke-test the installed wheel outside the checkout
+        run: |
+          pip wheel --no-deps . --wheel-dir /tmp/infraguard-dist
+          python -m venv /tmp/infraguard-installed
+          /tmp/infraguard-installed/bin/pip install /tmp/infraguard-dist/*.whl
+          cd /tmp
+          /tmp/infraguard-installed/bin/infraguard policies list --format json
       - run: pytest -m 'not integration' --cov=infraguard --cov-report=xml --cov-fail-under=85
       - uses: actions/upload-artifact@v4
         with:
@@ -63,6 +70,14 @@ jobs:
           ./bin/terraform -chdir=samples/terraform/compliant validate
           ./bin/terraform -chdir=samples/terraform/noncompliant init -backend=false
           ./bin/terraform -chdir=samples/terraform/noncompliant validate
+      - name: Verify real Terraform plans with mock credentials
+        run: |
+          export PATH="$GITHUB_WORKSPACE/bin:$PATH"
+          infraguard scan --no-cluster --terraform-dir samples/terraform/compliant --fail-on LOW --format json --output-dir reports/terraform-compliant
+          set +e
+          infraguard scan --no-cluster --terraform-dir samples/terraform/noncompliant --format json --output-dir reports/terraform-noncompliant
+          code=$?
+          test "$code" -eq 1
       - name: Prove Conftest policy gates
         run: |
           ./bin/conftest test samples/manifests/compliant --policy policies/kubernetes --namespace infraguard.kubernetes
@@ -97,6 +112,10 @@ jobs:
           config: cluster/kind-config.yaml
           node_image: kindest/node:v1.30.2
       - run: pip install -e '.[dev]'
+      - name: Install schema and policy binaries
+        run: |
+          ./scripts/install-tools.sh
+          echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
       - run: make deploy-samples
       - run: pytest -m integration --timeout=300
       - run: infraguard scan --context kind-infraguard -n ig-compliant --fail-on LOW --format json --format markdown --metrics-file reports/metrics.prom
@@ -105,4 +124,10 @@ jobs:
         with:
           name: integration-reports
           path: reports/
+      - name: Publish scan evidence in the job summary
+        if: always()
+        run: |
+          for report in reports/*.md; do
+            if test -f "$report"; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 

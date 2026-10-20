@@ -3,11 +3,19 @@ from pathlib import Path
 import pytest
 
 from infraguard.mcp_server import server
+from infraguard.remediation.models import PipelineResult, StepResult
+from infraguard.validators.native import NativePolicyValidator
 
 
 @pytest.fixture(autouse=True)
-def configured_root() -> None:
+def configured_root(monkeypatch, tmp_path) -> None:
     server.configure(allowed_root=Path.cwd())
+    from infraguard.mcp_server.audit import configure_audit
+
+    configure_audit(tmp_path)
+    monkeypatch.setattr(
+        server, "build_validators", lambda catalog: [NativePolicyValidator(catalog)]
+    )
 
 
 def test_analyze_plan_returns_change_summary() -> None:
@@ -28,7 +36,16 @@ def test_validate_manifest_returns_findings() -> None:
     assert len(result["findings"]) == 13
 
 
-def test_validate_patch_never_applies() -> None:
+def test_validate_patch_never_applies(monkeypatch) -> None:
+    def checked(proposal, **kwargs):
+        return PipelineResult(
+            proposal_id=proposal.proposal_id,
+            steps=[StepResult(step="dry_run", result="pass", duration_ms=0)],
+            diff="checked diff",
+            applied=False,
+        )
+
+    monkeypatch.setattr(server, "check_proposal", checked)
     source = Path("samples/manifests/compliant/app.yaml").read_text().split("---", 1)[0]
     result = server.validate_patch("Deployment", "compliant-app", "ig-compliant", source)
     assert result["applied"] is False
@@ -38,4 +55,4 @@ def test_validate_patch_never_applies() -> None:
 
 def test_manifest_limit_rejects_too_many_documents() -> None:
     with pytest.raises(ValueError, match="50 documents"):
-        server.validate_manifest("\n---".join(["{}"] * 51))
+        server.validate_manifest("\n---\n".join(["{}"] * 51))

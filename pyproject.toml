@@ -25,6 +25,9 @@ infraguard = "infraguard.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/infraguard"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"policies" = "infraguard/policy_data"
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers --timeout=60"
 testpaths = ["tests"]

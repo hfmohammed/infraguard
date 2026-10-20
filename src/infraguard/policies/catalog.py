@@ -23,7 +23,7 @@ class PolicyCatalog:
     @classmethod
     def load(cls, path: Path | None = None) -> PolicyCatalog:
         """Load metadata from YAML."""
-        path = path or Path("policies/metadata.yaml")
+        path = path or policy_directory() / "metadata.yaml"
         try:
             raw = yaml.safe_load(path.read_text())
             return cls(TypeAdapter(list[PolicyMeta]).validate_python(raw))
@@ -43,3 +43,10 @@ class PolicyCatalog:
 
     def __len__(self) -> int:
         return len(self._policies)
+
+
+def policy_directory() -> Path:
+    """Locate shipped policies in a wheel or an editable source checkout."""
+    package = Path(__file__).resolve().parents[1]
+    bundled = package / "policy_data"
+    return bundled if bundled.is_dir() else package.parents[1] / "policies"

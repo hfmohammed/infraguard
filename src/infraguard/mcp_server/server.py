@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
+from uuid import uuid4
 
 import yaml
 from mcp.server.fastmcp import FastMCP
@@ -12,10 +14,13 @@ from mcp.server.fastmcp import FastMCP
 from infraguard.collectors.kubernetes_live import KubernetesLiveCollector
 from infraguard.collectors.manifests import ManifestCollector
 from infraguard.collectors.terraform_plan import TerraformPlanCollector
+from infraguard.mcp_server.audit import audited, configure_audit
 from infraguard.mcp_server.readonly import guarded_path
+from infraguard.models import ResourceRef, SourceType
 from infraguard.policies.catalog import PolicyCatalog
-from infraguard.remediation.pipeline import validate_manifest_size_and_count
-from infraguard.validators.native import NativePolicyValidator
+from infraguard.remediation.models import RemediationProposal
+from infraguard.remediation.pipeline import check_proposal, validate_manifest_size_and_count
+from infraguard.validators.registry import build_validators
 
 mcp = FastMCP("infraguard")
 _allowed_root = Path.cwd()
@@ -27,6 +32,7 @@ def configure(*, allowed_root: Path | None = None, context: str | None = None) -
     global _allowed_root, _context
     _allowed_root = (allowed_root or Path.cwd()).resolve()
     _context = context
+    configure_audit(_allowed_root)
 
 
 def _resources(kind: str | None = None, namespace: str | None = None) -> list[Any]:
@@ -41,6 +47,7 @@ def _resources(kind: str | None = None, namespace: str | None = None) -> list[An
 
 
 @mcp.tool()
+@audited
 def list_cluster_resources(
     kind: str | None = None, namespace: str | None = None, limit: int = 100
 ) -> list[dict[str, Any]]:
@@ -53,6 +60,7 @@ def list_cluster_resources(
 
 
 @mcp.tool()
+@audited
 def get_resource(kind: str, name: str, namespace: str | None = None) -> dict[str, Any]:
     """Return one redacted live manifest."""
     for resource in _resources(kind, namespace):
@@ -62,6 +70,7 @@ def get_resource(kind: str, name: str, namespace: str | None = None) -> dict[str
 
 
 @mcp.tool()
+@audited
 def get_policy_findings(
     severity: str | None = None,
     policy_id: str | None = None,
@@ -69,6 +78,11 @@ def get_policy_findings(
     report_path: str | None = None,
 ) -> dict[str, Any]:
     """Read findings from a guarded report path or run a fresh read-only scan."""
+    if report_path is None:
+        reports = sorted(
+            (_allowed_root / "reports").glob("scan-*.json"), key=lambda p: p.stat().st_mtime
+        )
+        report_path = str(reports[-1]) if reports else None
     if report_path:
         from infraguard.models import ScanReport
 
@@ -79,8 +93,12 @@ def get_policy_findings(
         summary = report.summary.model_dump(mode="json")
     else:
         resources = _resources(namespace=namespace)
-        catalog = PolicyCatalog.load(_allowed_root / "policies" / "metadata.yaml")
-        findings, _ = NativePolicyValidator(catalog).validate(resources)
+        catalog = PolicyCatalog.load()
+        findings = [
+            finding
+            for validator in build_validators(catalog)
+            for finding in validator.validate(resources)[0]
+        ]
         summary = {"findings_total": len(findings), "resources_scanned": len(resources)}
     selected = [
         finding.model_dump(mode="json")
@@ -93,13 +111,16 @@ def get_policy_findings(
 
 
 @mcp.tool()
+@audited
 def analyze_terraform_plan(plan_json_path: str) -> dict[str, Any]:
     """Analyze an existing plan inside the allowed root without running Terraform."""
     path = guarded_path(plan_json_path, _allowed_root)
     resources = list(TerraformPlanCollector(plan_json=path).collect())
-    findings, _ = NativePolicyValidator(
-        PolicyCatalog.load(_allowed_root / "policies" / "metadata.yaml")
-    ).validate(resources)
+    findings = [
+        finding
+        for validator in build_validators(PolicyCatalog.load())
+        for finding in validator.validate(resources)[0]
+    ]
     changes = {"create": 0, "update": 0, "delete": 0, "replace": 0}
     for resource in resources:
         actions = resource.raw.get("change", {}).get("actions", [])
@@ -113,26 +134,31 @@ def analyze_terraform_plan(plan_json_path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+@audited
 def validate_manifest(manifest_yaml: str) -> dict[str, Any]:
-    """Validate supplied YAML with the deterministic policy catalog."""
+    """Check supplied YAML against Kubernetes schemas and the Rego catalog."""
     validate_manifest_size_and_count(manifest_yaml)
     list(yaml.safe_load_all(manifest_yaml))  # fail early on malformed YAML
     with tempfile.TemporaryDirectory(prefix="infraguard-mcp-") as temporary:
         source = Path(temporary) / "input.yaml"
         source.write_text(manifest_yaml)
         resources = list(ManifestCollector([source]).collect())
-    findings, _ = NativePolicyValidator(
-        PolicyCatalog.load(_allowed_root / "policies" / "metadata.yaml")
-    ).validate(resources)
+    findings = [
+        finding
+        for validator in build_validators(PolicyCatalog.load())
+        for finding in validator.validate(resources)[0]
+    ]
+    schema_errors = [finding.message for finding in findings if finding.policy_id == "SCHEMA-001"]
     return {
-        "schema_valid": True,
-        "schema_errors": [],
+        "schema_valid": not schema_errors,
+        "schema_errors": schema_errors,
         "findings": [finding.model_dump(mode="json") for finding in findings],
         "passed": not findings,
     }
 
 
 @mcp.tool()
+@audited
 def validate_patch(
     target_kind: str,
     target_name: str,
@@ -140,7 +166,7 @@ def validate_patch(
     patched_manifest_yaml: str,
 ) -> dict[str, Any]:
     """Validate a proposed full manifest without applying it."""
-    result = cast(dict[str, Any], validate_manifest(patched_manifest_yaml))
+    validate_manifest_size_and_count(patched_manifest_yaml)
     documents = [
         item for item in yaml.safe_load_all(patched_manifest_yaml) if isinstance(item, dict)
     ]
@@ -150,13 +176,40 @@ def validate_patch(
         and documents[0].get("metadata", {}).get("name") == target_name
         and documents[0].get("metadata", {}).get("namespace", "default") == namespace
     )
-    result.update(
-        applied=False,
-        target_matches=target_matches,
-        next_step="a human must run `infraguard remediate apply` and approve",
+    if not target_matches:
+        return {
+            "applied": False,
+            "passed": False,
+            "target_matches": False,
+            "steps": [{"step": "schema", "result": "fail", "detail": "target identity mismatch"}],
+            "diff": None,
+            "next_step": "correct the target identity before retrying",
+        }
+    proposal = RemediationProposal(
+        proposal_id=str(uuid4()),
+        finding_fingerprint="external-patch",
+        policy_id="",
+        target=ResourceRef(
+            source=SourceType.KUBERNETES_LIVE,
+            kind=target_kind,
+            name=target_name,
+            namespace=namespace,
+        ),
+        proposed_manifest=documents[0],
+        rationale="Read-only MCP patch validation",
+        proposer="external_ai",
+        created_at=datetime.now(UTC),
     )
-    result["passed"] = bool(result["passed"] and target_matches)
-    return result
+    checked = check_proposal(
+        proposal, context=_context, audit_path=_allowed_root / "audit/remediation.jsonl"
+    )
+    return {
+        **checked.model_dump(mode="json"),
+        "applied": False,
+        "target_matches": True,
+        "passed": all(s.result == "pass" for s in checked.steps),
+        "next_step": "a human must run `infraguard remediate apply` and approve",
+    }
 
 
 def serve(transport: Literal["stdio", "sse", "streamable-http"] = "stdio") -> None:

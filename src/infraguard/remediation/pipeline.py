@@ -11,17 +11,20 @@ from typing import Any
 
 import yaml
 from kubernetes import client, config, dynamic
+from kubernetes.config.config_exception import ConfigException
+from kubernetes.dynamic.resource import ResourceInstance
 
 from infraguard.collectors.kubernetes_live import KubernetesLiveCollector
 from infraguard.errors import InfraGuardError
+from infraguard.mcp_server.readonly import ReadOnlyK8s
 from infraguard.models import Resource, ResourceRef, SourceType
 from infraguard.policies.catalog import PolicyCatalog
 from infraguard.remediation.approval import request_approval
 from infraguard.remediation.audit import append_step
 from infraguard.remediation.models import PipelineResult, RemediationProposal, StepResult
 from infraguard.remediation.proposer import strip_server_fields
+from infraguard.validators.conftest import ConftestValidator
 from infraguard.validators.kubeconform import KubeconformValidator
-from infraguard.validators.native import NativePolicyValidator
 
 ALLOWED_APIS = {"apps/v1", "v1", "batch/v1", "networking.k8s.io/v1", "policy/v1"}
 DENIED_KINDS = {
@@ -44,6 +47,10 @@ def validate_proposal(proposal: RemediationProposal) -> StepResult:
     started = perf_counter()
     manifest = proposal.proposed_manifest
     metadata = manifest.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return StepResult(
+            step="schema", result="fail", detail="metadata must be an object", duration_ms=0
+        )
     errors: list[str] = []
     if proposal.target.source != SourceType.KUBERNETES_LIVE:
         errors.append("target source must be kubernetes_live")
@@ -59,6 +66,8 @@ def validate_proposal(proposal: RemediationProposal) -> StepResult:
         errors.append("kind is denied for remediation")
     if len(json.dumps(manifest).encode()) > MAX_MANIFEST_BYTES:
         errors.append("manifest exceeds 256 KB")
+    if "***REDACTED***" in json.dumps(manifest):
+        errors.append("redacted values cannot be applied; supply an unredacted local proposal")
     return StepResult(
         step="schema",
         result="fail" if errors else "pass",
@@ -71,8 +80,9 @@ def validate_manifest_size_and_count(manifest_yaml: str) -> None:
     """Apply MCP manifest input limits before parsing."""
     if len(manifest_yaml.encode()) > MAX_MANIFEST_BYTES:
         raise ValueError("manifest input exceeds 256 KB")
-    if manifest_yaml.count("\n---") + 1 > 50:
-        raise ValueError("manifest input exceeds 50 documents")
+    for index, _ in enumerate(yaml.safe_load_all(manifest_yaml), start=1):
+        if index > 50:
+            raise ValueError("manifest input exceeds 50 documents")
 
 
 def _proposal_resource(proposal: RemediationProposal) -> Resource:
@@ -111,7 +121,7 @@ def _find_live_resource(proposal: RemediationProposal, context: str | None) -> R
 def _dynamic_resource(proposal: RemediationProposal, context: str | None) -> Any:
     try:
         config.load_kube_config(context=context)
-    except Exception:
+    except ConfigException:
         config.load_incluster_config()
     api = dynamic.DynamicClient(client.ApiClient())
     return api.resources.get(
@@ -133,9 +143,14 @@ def _server_side_apply(
     if proposal.target.namespace:
         kwargs["namespace"] = proposal.target.namespace
     if dry_run:
-        kwargs["dry_run"] = "All"
-    response = resource.patch(**kwargs)
-    serialized = client.ApiClient().sanitize_for_serialization(response)
+        response = ReadOnlyK8s(resource).dry_run_apply("patch", **kwargs)
+    else:
+        response = resource.patch(**kwargs)
+    serialized = (
+        response.to_dict()
+        if isinstance(response, ResourceInstance)
+        else client.ApiClient().sanitize_for_serialization(response)
+    )
     if not isinstance(serialized, dict):
         raise TypeError("Kubernetes returned a non-object response")
     return serialized
@@ -188,10 +203,15 @@ def check_proposal(
     if kubeconform.result == "fail":
         return PipelineResult(proposal_id=proposal.proposal_id, steps=steps, applied=False)
 
-    live = _find_live_resource(proposal, context)
-    policy_validator = NativePolicyValidator(catalog)
-    live_findings, _ = policy_validator.validate([live])
-    proposed_findings, _ = policy_validator.validate([proposed])
+    try:
+        live = _find_live_resource(proposal, context)
+        policy_validator = ConftestValidator(catalog)
+        live_findings, _ = policy_validator.validate([live])
+        proposed_findings, _ = policy_validator.validate([proposed])
+    except (InfraGuardError, ValueError) as error:
+        failure = StepResult(step="conftest", result="fail", detail=str(error), duration_ms=0)
+        append_step(audit_path, proposal, failure, context)
+        return PipelineResult(proposal_id=proposal.proposal_id, steps=[*steps, failure])
     live_keys = {(finding.policy_id, finding.path) for finding in live_findings}
     proposed_keys = {(finding.policy_id, finding.path) for finding in proposed_findings}
     new_findings = proposed_keys - live_keys
@@ -251,7 +271,22 @@ def apply_proposal(
         return checked
 
     started = perf_counter()
-    approved = request_approval(proposal.target.name)
+    print_approval_summary(proposal, checked, context)
+    try:
+        approved = request_approval(proposal.target.name)
+    except RuntimeError as error:
+        append_step(
+            audit_path,
+            proposal,
+            StepResult(
+                step="approval",
+                result="rejected",
+                detail=str(error),
+                duration_ms=0,
+            ),
+            context,
+        )
+        raise
     approval = StepResult(
         step="approval",
         result="approved" if approved else "rejected",
@@ -280,3 +315,27 @@ def apply_proposal(
     steps.append(applied)
     append_step(audit_path, proposal, applied, context)
     return checked.model_copy(update={"steps": steps, "applied": applied.result == "pass"})
+
+
+def print_approval_summary(
+    proposal: RemediationProposal, checked: PipelineResult, context: str | None
+) -> None:
+    """Show the exact checked change before requesting interactive approval."""
+    from rich.console import Console
+    from rich.syntax import Syntax
+
+    console = Console()
+    console.print("InfraGuard remediation approval", style="bold")
+    for label, value in (
+        ("Proposal", proposal.proposal_id),
+        ("Proposer", proposal.proposer),
+        ("Policy", proposal.policy_id),
+        ("Target", proposal.target.key()),
+        ("Context", context or "current"),
+        ("Rationale", proposal.rationale),
+    ):
+        console.print(f"{label}: {value}", markup=False)
+    console.print(
+        "Checks: " + ", ".join(f"{s.step}={s.result}" for s in checked.steps), markup=False
+    )
+    console.print(Syntax(checked.diff or "(no changes)", "diff", word_wrap=True))

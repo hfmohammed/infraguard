@@ -30,6 +30,7 @@ def run_scan(
     started_at = datetime.now(UTC)
     started = perf_counter()
     resources = [resource for collector in collectors for resource in collector.collect()]
+    collected_ms = (perf_counter() - started) * 1000
     findings: list[Finding] = []
     runs = []
     for validator in validators:
@@ -47,6 +48,18 @@ def run_scan(
     summary = ScanSummary(
         resources_scanned=len(resources),
         resources_by_source=dict(sorted(source_counts.items())),
+        resources_by_kind={
+            source: dict(
+                sorted(
+                    Counter(
+                        resource.ref.kind
+                        for resource in resources
+                        if resource.ref.source.value == source
+                    ).items()
+                )
+            )
+            for source in sorted(source_counts)
+        },
         findings_total=len(ordered),
         by_severity=SeveritySummary(**severity_counts),
         by_policy=dict(sorted(policy_counts.items())),
@@ -60,6 +73,11 @@ def run_scan(
         started_at=started_at,
         finished_at=finished_at,
         duration_ms=(perf_counter() - started) * 1000,
+        phase_durations_ms={
+            "collect": collected_ms,
+            "schema": sum(run.duration_ms for run in runs if run.name == "kubeconform"),
+            "policy": sum(run.duration_ms for run in runs if run.name != "kubeconform"),
+        },
         targets=[collector.describe_target() for collector in collectors],
         fail_on=fail_on,
         summary=summary,

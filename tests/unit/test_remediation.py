@@ -15,6 +15,13 @@ from infraguard.remediation.pipeline import (
     validate_manifest_size_and_count,
     validate_proposal,
 )
+from infraguard.validators.native import NativePolicyValidator
+
+
+@pytest.fixture(autouse=True)
+def isolated_policy_tool(monkeypatch):
+    # Unit tests exercise pipeline decisions; external Rego parity is tested separately.
+    monkeypatch.setattr("infraguard.remediation.pipeline.ConftestValidator", NativePolicyValidator)
 
 
 def proposal(**manifest_updates: object) -> RemediationProposal:

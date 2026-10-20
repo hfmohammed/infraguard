@@ -22,7 +22,7 @@ class ReadOnlyK8s:
 
     def dry_run_apply(self, method: str, **kwargs: Any) -> Any:
         """Call a patch method with mandatory server-side dry-run controls."""
-        if not method.startswith("patch_"):
+        if method != "patch" and not method.startswith("patch_"):
             raise ReadOnlyViolation("dry-run apply requires a patch method")
         kwargs.update(dry_run="All", field_manager="infraguard")
         return getattr(self._client, method)(**kwargs)

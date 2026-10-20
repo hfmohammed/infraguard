@@ -26,6 +26,7 @@ def test_validate_compliant_passes(tmp_path: Path) -> None:
         app,
         [
             "validate",
+            "--offline",
             "samples/manifests/compliant",
             "--fail-on",
             "LOW",
@@ -42,7 +43,7 @@ def test_validate_compliant_passes(tmp_path: Path) -> None:
 def test_validate_noncompliant_fails_gate() -> None:
     result = runner.invoke(
         app,
-        ["validate", "samples/manifests/noncompliant", "--fail-on", "HIGH"],
+        ["validate", "--offline", "samples/manifests/noncompliant", "--fail-on", "HIGH"],
     )
     assert result.exit_code == 1
     assert "FAILED" in result.stdout
@@ -51,7 +52,7 @@ def test_validate_noncompliant_fails_gate() -> None:
 def test_validate_none_passes_noncompliant() -> None:
     result = runner.invoke(
         app,
-        ["validate", "samples/manifests/noncompliant", "--fail-on", "NONE"],
+        ["validate", "--offline", "samples/manifests/noncompliant", "--fail-on", "NONE"],
     )
     assert result.exit_code == 0
     assert "PASSED" in result.stdout
@@ -67,6 +68,7 @@ def test_scan_plan_only_and_rerender(tmp_path: Path) -> None:
         app,
         [
             "scan",
+            "--offline",
             "--no-cluster",
             "--plan-json",
             "samples/terraform/plan-fixtures/destroy.plan.fixture.json",
@@ -88,6 +90,44 @@ def test_scan_plan_only_and_rerender(tmp_path: Path) -> None:
 def test_scan_requires_at_least_one_target() -> None:
     result = runner.invoke(app, ["scan", "--no-cluster"])
     assert result.exit_code == 2
+
+
+def test_invalid_severity_is_a_usage_error():
+    result = runner.invoke(
+        app, ["validate", "--offline", "samples/manifests/compliant", "--fail-on", "TYPO"]
+    )
+    assert result.exit_code == 2
+    assert "--fail-on" in result.output
+
+
+def test_schema_only_cannot_be_combined_with_offline():
+    result = runner.invoke(
+        app, ["validate", "--offline", "--schema-only", "samples/manifests/compliant"]
+    )
+    assert result.exit_code == 2
+
+
+def test_report_table_and_metrics_formats(tmp_path):
+    scan = runner.invoke(
+        app,
+        [
+            "validate",
+            "--offline",
+            "samples/manifests/compliant",
+            "--format",
+            "json",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+    assert scan.exit_code == 0
+    report = str(next(tmp_path.glob("*.json")))
+    table = runner.invoke(app, ["report", report, "--format", "table"])
+    assert table.exit_code == 0
+    assert "PASSED" in table.stdout
+    metrics = runner.invoke(app, ["report", report, "--format", "prometheus"])
+    assert metrics.exit_code == 0
+    assert "infraguard_last_scan_passed 1.0" in metrics.stdout
 
 
 def test_remediation_apply_refuses_noninteractive(tmp_path: Path, monkeypatch) -> None:
