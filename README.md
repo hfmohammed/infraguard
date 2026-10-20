@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/images/infraguard-hero.png" alt="InfraGuard infrastructure policy validation" width="100%">
-</p>
-
 # InfraGuard
 
 > A read-only-first Kubernetes and Terraform policy scanner with deterministic reports, a constrained MCP surface, and human-approved remediation.
