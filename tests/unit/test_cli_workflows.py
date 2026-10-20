@@ -4,6 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from infraguard.cli import app
+from infraguard.remediation.models import PipelineResult, StepResult
 
 runner = CliRunner()
 
@@ -89,7 +90,7 @@ def test_scan_requires_at_least_one_target() -> None:
     assert result.exit_code == 2
 
 
-def test_remediation_apply_refuses_noninteractive(tmp_path: Path) -> None:
+def test_remediation_apply_refuses_noninteractive(tmp_path: Path, monkeypatch) -> None:
     proposal = {
         "proposal_id": "demo",
         "finding_fingerprint": "abc",
@@ -114,6 +115,17 @@ def test_remediation_apply_refuses_noninteractive(tmp_path: Path) -> None:
     import yaml
 
     path.write_text(yaml.safe_dump(proposal))
+    checked_result = PipelineResult(
+        proposal_id="demo",
+        steps=[StepResult(step="schema", result="pass", duration_ms=0)],
+        applied=False,
+    )
+    monkeypatch.setattr("infraguard.cli.check_proposal", lambda *args, **kwargs: checked_result)
+
+    def reject_noninteractive(*args, **kwargs):
+        raise RuntimeError("approval requires an interactive terminal")
+
+    monkeypatch.setattr("infraguard.cli.apply_proposal", reject_noninteractive)
     checked = runner.invoke(app, ["remediate", "check", str(path)])
     applied = runner.invoke(app, ["remediate", "apply", str(path)])
     assert checked.exit_code == 0

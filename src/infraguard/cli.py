@@ -21,9 +21,9 @@ from infraguard.mcp_server.server import configure as configure_mcp
 from infraguard.mcp_server.server import serve as serve_mcp
 from infraguard.models import ScanReport, Severity
 from infraguard.policies.catalog import PolicyCatalog
-from infraguard.remediation.approval import request_approval
 from infraguard.remediation.models import RemediationProposal
-from infraguard.remediation.pipeline import validate_proposal
+from infraguard.remediation.pipeline import apply_proposal, check_proposal
+from infraguard.remediation.proposer import propose
 from infraguard.reporting.json_report import render_json, write_json
 from infraguard.reporting.markdown_report import render_markdown, write_markdown
 from infraguard.reporting.metrics import write_metrics
@@ -194,34 +194,72 @@ def _load_proposal(path: Path) -> RemediationProposal:
     return RemediationProposal.model_validate(raw)
 
 
+@remediate_app.command("propose")
+def remediate_propose(
+    report_json: Annotated[Path, typer.Option("--report")],
+    finding_fingerprint: Annotated[str, typer.Option("--finding")],
+    output: Annotated[Path, typer.Option("--out")] = Path("proposal.yaml"),
+    context: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Build a deterministic proposal from a live-resource finding."""
+    report_model = ScanReport.model_validate_json(report_json.read_text())
+    finding = next(
+        (item for item in report_model.findings if item.fingerprint == finding_fingerprint),
+        None,
+    )
+    if finding is None:
+        raise typer.BadParameter(f"finding not found: {finding_fingerprint}")
+    resources = KubernetesLiveCollector(
+        context=context,
+        namespaces=[finding.resource.namespace] if finding.resource.namespace else None,
+    ).collect()
+    resource = next(
+        (
+            item
+            for item in resources
+            if item.ref.kind == finding.resource.kind
+            and item.ref.name == finding.resource.name
+            and item.ref.namespace == finding.resource.namespace
+        ),
+        None,
+    )
+    if resource is None:
+        raise typer.BadParameter(f"live resource not found: {finding.resource.key()}")
+    proposal = propose(finding, resource)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(yaml.safe_dump(proposal.model_dump(mode="json"), sort_keys=False))
+    typer.echo(f"Proposal written: {output}")
+
+
 @remediate_app.command("check")
-def remediate_check(proposal_yaml: Path) -> None:
-    """Run the fail-closed proposal identity and scope checks."""
-    step = validate_proposal(_load_proposal(proposal_yaml))
-    typer.echo(step.model_dump_json(indent=2))
-    if step.result == "fail":
+def remediate_check(
+    proposal_yaml: Path,
+    context: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Run schema, policy, and server-side dry-run checks without applying."""
+    result = check_proposal(_load_proposal(proposal_yaml), context=context)
+    typer.echo(result.model_dump_json(indent=2))
+    if any(step.result == "fail" for step in result.steps):
         raise typer.Exit(1)
 
 
 @remediate_app.command("apply")
-def remediate_apply(proposal_yaml: Path) -> None:
-    """Require interactive approval after validating a proposal."""
+def remediate_apply(
+    proposal_yaml: Path,
+    context: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Run every gate and apply only after interactive human approval."""
     proposal = _load_proposal(proposal_yaml)
-    step = validate_proposal(proposal)
-    if step.result == "fail":
-        typer.echo(step.detail)
-        raise typer.Exit(1)
     try:
-        approved = request_approval(proposal.target.name)
+        result = apply_proposal(proposal, context=context)
     except RuntimeError as error:
         typer.echo(str(error))
         raise typer.Exit(4) from error
-    if not approved:
-        typer.echo("remediation rejected")
+    typer.echo(result.model_dump_json(indent=2))
+    if any(step.result == "fail" for step in result.steps):
+        raise typer.Exit(1)
+    if not result.applied:
         raise typer.Exit(4)
-    typer.echo(
-        "approval recorded; use the Kubernetes client integration to perform server-side apply"
-    )
 
 
 def main() -> None:
