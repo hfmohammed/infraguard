@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from click import unstyle
 from typer.testing import CliRunner
 
 from infraguard.cli import app
@@ -97,7 +98,7 @@ def test_invalid_severity_is_a_usage_error():
         app, ["validate", "--offline", "samples/manifests/compliant", "--fail-on", "TYPO"]
     )
     assert result.exit_code == 2
-    assert "--fail-on" in result.output
+    assert "--fail-on" in unstyle(result.output)
 
 
 def test_schema_only_cannot_be_combined_with_offline():
