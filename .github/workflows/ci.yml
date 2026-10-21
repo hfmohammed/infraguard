@@ -89,7 +89,11 @@ jobs:
             echo "expected noncompliant Terraform plan to fail policy validation" >&2
             exit 1
           fi
-      - run: python -m infraguard validate samples/manifests/compliant --fail-on LOW
+      - name: Gate compliant manifests and rendered Helm policies
+        run: |
+          export PATH="$GITHUB_WORKSPACE/bin:$PATH"
+          python -m infraguard validate samples/manifests/compliant --fail-on LOW
+          python -m infraguard validate --helm-chart samples/charts/compliant-app --fail-on LOW
       - name: Prove the negative gate
         run: |
           set +e
