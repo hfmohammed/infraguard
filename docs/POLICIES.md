@@ -24,5 +24,11 @@
 | TF-PLAN-001 | HIGH | Resource destroyed or replaced | terraform_analyzer |
 | TF-PLAN-002 | CRITICAL | Stateful resource replacement | terraform_analyzer |
 
-S3 companion resources join on the planned bucket value. When Terraform leaves it unknown, the production Conftest adapter can resolve configuration references; the committed fixture uses sanitized known mock values for deterministic offline testing.
+## Evaluation notes
+
+Normal scans combine kubeconform, Conftest/Rego, and native inventory/action checks. `SCHEMA-001` is a schema diagnostic, separate from the 21 catalog controls.
+
+S3 companion resources join by known bucket names or by Terraform configuration references when planned IDs are unknown. The collector retains only those references and removes configuration constants and variables from the redacted plan. Deleted companion resources do not satisfy a protective control.
+
+NetworkPolicy coverage means a policy exists in the namespace; it does not prove that its selectors and traffic rules protect every workload.
 

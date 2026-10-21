@@ -249,6 +249,17 @@ def list_policies(format: Annotated[str, typer.Option()] = "table") -> None:
             typer.echo(
                 f"| {policy.id} | {policy.severity.value} | {policy.title} | {policy.engine} |"
             )
+        typer.echo(
+            "\n## Evaluation notes\n\n"
+            "Normal scans combine kubeconform, Conftest/Rego, and native inventory/action checks. "
+            "`SCHEMA-001` is a schema diagnostic, separate from the 21 catalog controls.\n\n"
+            "S3 companion resources join by known bucket names or by Terraform configuration "
+            "references when planned IDs are unknown. The collector retains only those references "
+            "and removes configuration constants and variables from the redacted plan. "
+            "Deleted companion resources do not satisfy a protective control.\n\n"
+            "NetworkPolicy coverage means a policy exists in the namespace; it does not prove "
+            "that its selectors and traffic rules protect every workload.\n"
+        )
     else:
         for policy in policies:
             typer.echo(f"{policy.severity.value:8} {policy.id:16} {policy.title}")

@@ -65,6 +65,22 @@ def test_reports_are_stable_after_removing_execution_metadata() -> None:
     assert normalized() == normalized()
 
 
+def test_markdown_matches_reviewable_golden_file():
+    from datetime import UTC, datetime
+
+    report = sample_report()
+    report = report.model_copy(
+        update={
+            "scan_id": "normalized-scan",
+            "finished_at": datetime(2026, 1, 1, tzinfo=UTC),
+            "validators": [
+                execution.model_copy(update={"duration_ms": 0}) for execution in report.validators
+            ],
+        }
+    )
+    assert render_markdown(report) == Path("tests/golden/report_noncompliant.md").read_text()
+
+
 def test_markdown_groups_findings_and_writes(tmp_path: Path) -> None:
     report = sample_report()
     rendered = render_markdown(report, Severity.HIGH)

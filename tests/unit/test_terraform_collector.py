@@ -117,6 +117,7 @@ def test_full_plan_redacts_planned_values_outputs_and_provider_constants(tmp_pat
                         ]
                     },
                 },
+                "variables": {"password": {"value": "variable-secret"}},
                 "resource_changes": [],
             }
         )
@@ -125,3 +126,4 @@ def test_full_plan_redacts_planned_values_outputs_and_provider_constants(tmp_pat
     assert "literal-secret" not in cleaned
     assert "output-secret" not in cleaned
     assert "planned-secret" not in cleaned
+    assert "variable-secret" not in cleaned

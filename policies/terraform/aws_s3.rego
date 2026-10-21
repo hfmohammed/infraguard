@@ -1,5 +1,27 @@
 package infraguard.terraform
 
+deny[tf_message("TF-AWS-S3-001", "bucket ACL grants public access", item.address)] {
+	item := changes[_]
+	item.type == "aws_s3_bucket_acl"
+	public_acl(item.change.after.acl)
+}
+
+public_acl(acl) {
+	acl == "public-read"
+}
+
+public_acl(acl) {
+	acl == "public-read-write"
+}
+
+deny[tf_message("TF-AWS-S3-001", "bucket public access block is incomplete", item.address)] {
+	item := changes[_]
+	item.type == "aws_s3_bucket_public_access_block"
+	item.change.after != null
+	flag := ["block_public_acls", "block_public_policy", "ignore_public_acls", "restrict_public_buckets"][_]
+	not object.get(item.change.after, flag, false)
+}
+
 deny[tf_message("TF-AWS-S3-001", "bucket does not block all public access", bucket.address)] {
 	bucket := changes[_]
 	bucket.type == "aws_s3_bucket"

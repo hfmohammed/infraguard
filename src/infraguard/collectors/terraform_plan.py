@@ -53,6 +53,7 @@ class TerraformPlanCollector:
             # Configuration expressions can contain literal provider credentials.
             # Keep only relationship references needed by the policy joins.
             self._plan.pop("configuration", None)
+            self._plan.pop("variables", None)
             self._plan = redact_plan_values(self._plan)
             for resource in self._plan.get("resource_changes", []):
                 resource["_references"] = references.get(

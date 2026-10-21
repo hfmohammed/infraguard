@@ -4,13 +4,13 @@ The Python unit suite is independent of external binaries. Tool and cluster chec
 
 | Requirement | Evidence |
 |---|---|
-| Deterministic findings and schema-backed JSON | `tests/unit/test_engine_reporting.py`, committed JSON Schema |
-| All 21 policy controls seeded | `tests/unit/test_policy_matrix.py`, native detection tests, Rego positive/negative control tests |
+| Deterministic findings, golden Markdown, schema-backed JSON | `tests/unit/test_engine_reporting.py`, committed JSON Schema and golden report |
+| All 21 policy controls seeded | Exact expected-pair comparison in `test_detection_accuracy.py`, policy matrix, Rego positive/negative control tests |
 | Strict schema and Rego validation | `validators/registry.py`, Conftest protocol tests, real CLI checks in `validate-iac` |
 | Real Terraform plans without applying | `validate-iac` scans both root modules with mock credentials and refresh disabled |
 | Installed package works outside the repo | Wheel build/install smoke test in each Python matrix job |
 | Metrics file and HTTP endpoint | `test_metrics_are_available_over_http`, integration report artifacts |
-| Live inventory and clean/seeded policy gates | `tests/integration/test_kind_collector.py`, `test_live_policy_accuracy` |
+| Live inventory, clean/seeded gates, full-validator accuracy | `tests/integration/test_kind_collector.py`, `test_live_policy_accuracy`, `test_full_validator_stack_matches_expected_inventory` |
 | Exactly six MCP tools and blocked mutations | Tool registry tests, capability-wrapper tests, six-tool kind exercise |
 | Patch validation cannot persist changes | Kind tests compare Deployment resource versions before and after dry-run |
 | Stop at the first failing remediation gate | Six parametrized live cases: good patch and five bad patches |

@@ -304,7 +304,11 @@ class NativePolicyValidator:
             }:
                 ingress = after.get(
                     "ingress",
-                    [after] if after.get("type") == "ingress" or "cidr_ipv4" in after else [],
+                    [after]
+                    if after.get("type") == "ingress"
+                    or "cidr_ipv4" in after
+                    or "cidr_ipv6" in after
+                    else [],
                 )
                 for rule in ingress or []:
                     cidrs = list(rule.get("cidr_blocks") or []) + list(
@@ -313,10 +317,8 @@ class NativePolicyValidator:
                     cidrs += [rule.get("cidr_ipv4"), rule.get("cidr_ipv6")]
                     world = any(cidr in {"0.0.0.0/0", "::/0"} for cidr in cidrs)
                     low, high = rule.get("from_port", 0), rule.get("to_port", 0)
-                    if world and (
-                        rule.get("protocol") == "-1"
-                        or (rule.get("protocol") == "tcp" and low <= 22 <= high)
-                    ):
+                    protocol = rule.get("protocol", rule.get("ip_protocol"))
+                    if world and (protocol == "-1" or (protocol == "tcp" and low <= 22 <= high)):
                         output.append(
                             self._finding(
                                 "TF-AWS-NET-001",
@@ -325,7 +327,7 @@ class NativePolicyValidator:
                                 "change.after.ingress",
                             )
                         )
-                    if world and (rule.get("protocol") == "-1" or (low == 0 and high == 65535)):
+                    if world and (protocol == "-1" or (low == 0 and high == 65535)):
                         output.append(
                             self._finding(
                                 "TF-AWS-NET-002",
@@ -356,6 +358,36 @@ class NativePolicyValidator:
                             "change.after.policy",
                         )
                     )
+            if resource.ref.kind == "aws_s3_bucket_acl" and after.get("acl") in {
+                "public-read",
+                "public-read-write",
+            }:
+                output.append(
+                    self._finding(
+                        "TF-AWS-S3-001", resource, "bucket ACL grants public access", "change.after"
+                    )
+                )
+            if (
+                resource.ref.kind == "aws_s3_bucket_public_access_block"
+                and after
+                and not all(
+                    after.get(flag) is True
+                    for flag in (
+                        "block_public_acls",
+                        "block_public_policy",
+                        "ignore_public_acls",
+                        "restrict_public_buckets",
+                    )
+                )
+            ):
+                output.append(
+                    self._finding(
+                        "TF-AWS-S3-001",
+                        resource,
+                        "bucket public access block is incomplete",
+                        "change.after",
+                    )
+                )
         for bucket in buckets:
             if bucket.raw.get("change", {}).get("after") is None:
                 continue

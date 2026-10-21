@@ -19,6 +19,14 @@ deny[message("K8S-SEC-003", "host namespace is enabled", "spec")] {
 	object.get(pod_spec, "hostNetwork", false)
 }
 
+deny[message("K8S-SEC-002", sprintf("container '%s' may run as root", [container.name]), "securityContext.runAsNonRoot")] {
+	workload_kind
+	container := all_containers[_]
+	security := object.get(container, "securityContext", {})
+	pod_security := object.get(pod_spec, "securityContext", {})
+	object.get(security, "runAsUser", object.get(pod_security, "runAsUser", -1)) == 0
+}
+
 deny[message("K8S-SEC-003", "host namespace is enabled", "spec")] {
 	workload_kind
 	object.get(pod_spec, "hostPID", false)

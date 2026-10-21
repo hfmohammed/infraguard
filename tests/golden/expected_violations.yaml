@@ -12,11 +12,13 @@
 - {policy_id: K8S-NET-001, resource_key: ig-noncompliant/Service/exposed-svc}
 - {policy_id: K8S-NET-002, resource_key: ig-noncompliant/Deployment/vulnerable-app}
 - {policy_id: TF-AWS-NET-001, resource_key: aws_security_group.ssh_open}
+- {policy_id: TF-AWS-NET-001, resource_key: aws_security_group.wide_open}
 - {policy_id: TF-AWS-NET-002, resource_key: aws_security_group.wide_open}
 - {policy_id: TF-AWS-S3-001, resource_key: aws_s3_bucket.raw_logs}
 - {policy_id: TF-AWS-S3-002, resource_key: aws_s3_bucket.raw_logs}
 - {policy_id: TF-AWS-S3-003, resource_key: aws_s3_bucket.raw_logs}
 - {policy_id: TF-AWS-IAM-001, resource_key: aws_iam_policy.admin_everything}
 - {policy_id: TF-PLAN-001, resource_key: aws_db_instance.main}
+- {policy_id: TF-PLAN-001, resource_key: aws_instance.legacy}
 - {policy_id: TF-PLAN-002, resource_key: aws_db_instance.main}
 

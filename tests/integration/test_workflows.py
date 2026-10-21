@@ -11,6 +11,8 @@ from typer.testing import CliRunner
 
 from infraguard.cli import app
 from infraguard.collectors.kubernetes_live import KubernetesLiveCollector
+from infraguard.collectors.manifests import ManifestCollector
+from infraguard.collectors.terraform_plan import TerraformPlanCollector
 from infraguard.engine import run_scan
 from infraguard.mcp_server import server
 from infraguard.policies.catalog import PolicyCatalog
@@ -19,6 +21,24 @@ from infraguard.remediation.pipeline import check_proposal
 from infraguard.validators.registry import build_validators
 
 pytestmark = pytest.mark.integration
+
+
+def test_full_validator_stack_matches_expected_inventory(cluster_context):
+    catalog = PolicyCatalog.load()
+    collectors = [ManifestCollector([Path("samples/manifests/noncompliant")])]
+    collectors.extend(
+        TerraformPlanCollector(
+            plan_json=Path(f"samples/terraform/plan-fixtures/{name}.plan.fixture.json")
+        )
+        for name in ("noncompliant", "destroy")
+    )
+    report = run_scan(collectors, build_validators(catalog), catalog=catalog)
+    expected = {
+        (row["policy_id"], row["resource_key"])
+        for row in yaml.safe_load(Path("tests/golden/expected_violations.yaml").read_text())
+    }
+    assert {(f.policy_id, f.resource.key()) for f in report.findings} == expected
+    assert len(report.findings) == len(expected)
 
 
 def live_deployment(context):
