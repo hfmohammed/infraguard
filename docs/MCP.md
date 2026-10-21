@@ -6,3 +6,7 @@ The Kubernetes wrapper permits `list_*` and `read_*` operations. The sole patch 
 
 The included RBAC role intentionally cannot read Secrets. Kubernetes authorizes server-side dry-run like a real patch, so patch RBAC is required only when enabling patch validation with a trusted context.
 
+Manifest validation runs kubeconform and Conftest. Patch validation runs the same technical gates as `remediate check`, including a live policy comparison and server-side dry-run, and returns the diff. No MCP tool calls `apply_proposal` or requests approval.
+
+Every invocation appends `{ts, tool, args_sha256, result, duration_ms}` to `audit/mcp-calls.jsonl` under the allowed root. The `infraguard_mcp_tool_calls_total` counter records outcomes in this process. Arguments, responses, and exception messages are excluded from call records. Audit files are local append-only evidence, not a tamper-resistant centralized log.
+

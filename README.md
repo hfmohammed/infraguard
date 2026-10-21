@@ -9,11 +9,11 @@
 [![MCP tools](https://img.shields.io/badge/MCP_tools-6-7C3AED)](docs/MCP.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-InfraGuard demonstrates how a platform team can apply the same guardrails to source manifests, rendered Helm charts, live Kubernetes objects, and Terraform plan JSON. The scanner normalizes every target into immutable models, evaluates security and reliability policy, and emits stable evidence for humans, CI, Prometheus, and AI clients.
+InfraGuard checks source manifests, rendered Helm charts, live Kubernetes objects, and Terraform plan JSON. It combines strict Kubernetes schemas, Rego policies, and Python checks for inventory-wide relationships and destructive changes. Findings have stable identities and can gate CI or be exported as JSON, Markdown, terminal tables, and Prometheus metrics.
 
 The project deliberately treats AI as an untrusted proposer. MCP operations are read-only, secrets are removed at collection boundaries, and a remediation cannot mutate Kubernetes until it passes technical gates and a person approves the exact resource in an interactive terminal.
 
-## What this project demonstrates
+## Capabilities
 
 | Capability | Implementation evidence |
 |---|---|
@@ -37,13 +37,11 @@ These captures are regenerated from the committed fixtures and runtime tool regi
 ![InfraGuard Markdown report](docs/images/markdown-report.svg)
 
 <details>
-<summary>Metrics, MCP surface, and remediation approval</summary>
+<summary>Metrics and MCP surface</summary>
 
 ![InfraGuard metrics summary](docs/images/metrics-dashboard.svg)
 
 ![InfraGuard MCP tools](docs/images/mcp-tools.svg)
-
-![InfraGuard approval prompt](docs/images/approval-prompt.svg)
 
 </details>
 
@@ -99,6 +97,7 @@ python3.12 -m venv .venv
 
 .venv/bin/infraguard validate \
   samples/manifests/noncompliant \
+  --offline \
   --plan-json samples/terraform/plan-fixtures/noncompliant.plan.fixture.json \
   --fail-on NONE \
   --format table \
@@ -107,12 +106,12 @@ python3.12 -m venv .venv
   --metrics-file reports/metrics.prom
 ```
 
-Expected result: six normalized resources, 19 deliberately seeded findings, and reports under `reports/`. `--fail-on NONE` keeps the demonstration command successful while still reporting every violation.
+Expected result: six normalized resources, 20 deliberately seeded findings, and reports under `reports/`. Both world-open security groups expose SSH, so `TF-AWS-NET-001` appears twice. `--fail-on NONE` keeps the demonstration command successful while still reporting every violation.
 
 Compare the clean target:
 
 ```bash
-.venv/bin/infraguard validate samples/manifests/compliant --fail-on LOW
+.venv/bin/infraguard validate samples/manifests/compliant --offline --fail-on LOW
 ```
 
 ## Full local platform demo
@@ -142,7 +141,7 @@ make cluster-down
 
 Every catalog entry has severity, category, remediation guidance, engine ownership, and a seeded fixture. See the generated [policy reference](docs/POLICIES.md).
 
-The default offline path uses the built-in deterministic evaluator so it remains fast and dependency-light. Rego sources provide Conftest compatibility, while Python handles checks that need joins across the complete inventory or Terraform action semantics.
+Normal scans run kubeconform, Conftest/Rego, the network inventory check, and the Terraform action analyzer. Missing binaries and tool failures stop the scan. `--offline` explicitly selects the native evaluator and omits external schema checks; it is useful for demonstrations and quick local feedback. `--skip-schema` on `scan`, or `--policy-only` on `validate`, retains Rego validation without kubeconform.
 
 ## CLI
 
@@ -180,6 +179,8 @@ The server registers exactly these six tools:
 
 `validate_patch` performs validation only and always returns `applied: false`. Filesystem arguments must resolve under `--allowed-root`; YAML is capped at 256 KB and 50 documents; results are redacted. The Kubernetes capability wrapper exposes read/list operations and a dry-run-only patch path.
 
+`validate_manifest` runs actual schema and policy checks. `validate_patch` also checks target identity, compares live and proposed findings, and requests a server-side dry-run. Every call writes a content hash and outcome to `audit/mcp-calls.jsonl`; arguments and returned manifests are not logged.
+
 ```json
 {
   "mcpServers": {
@@ -206,6 +207,18 @@ infraguard remediate apply proposal.yaml --context kind-infraguard
 
 `check` stops after server-side dry-run. `apply` reruns the gates, refuses noninteractive input, requires the exact resource name, and only then performs server-side apply. Each executed step is appended to `audit/remediation.jsonl`; the manifest itself is never logged, only its SHA-256.
 
+The approval screen shows the target, context, rationale, gate outcomes, and checked diff before asking for input. Proposals containing redaction placeholders are rejected to avoid overwriting secret values. For the bundled cluster, try `infraguard remediate check samples/remediation/good-patch.yaml --context kind-infraguard`; the five files under `bad-patches/` exercise identity, kind, schema, policy, and admission failures.
+
+## Metrics endpoint
+
+```bash
+infraguard scan --context kind-infraguard -n ig-compliant \
+  --serve-metrics 9108 --metrics-file reports/metrics.prom
+curl http://127.0.0.1:9108/metrics
+```
+
+The endpoint serves the completed scan until Ctrl-C; it does not rescan periodically. It binds to localhost unless `--metrics-host` is specified. Metrics include severity counts, source/kind inventory, scan phase durations, policy counts, completion time, and process-local MCP/remediation counters.
+
 ## CI and verification
 
 The GitHub Actions workflow separates concerns:
@@ -225,7 +238,7 @@ make screenshots
 ./scripts/check_no_plans.sh
 ```
 
-Measured results—not estimates—are recorded in [docs/METRICS.md](docs/METRICS.md).
+Measured results are recorded in [docs/METRICS.md](docs/METRICS.md). The [verification guide](docs/VERIFICATION.md) maps requirements to executable checks and describes the manual approval exercise.
 
 ## Security model
 

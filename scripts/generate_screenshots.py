@@ -13,6 +13,7 @@ from infraguard.collectors.manifests import ManifestCollector
 from infraguard.collectors.terraform_plan import TerraformPlanCollector
 from infraguard.engine import run_scan
 from infraguard.mcp_server.server import mcp
+from infraguard.models import ScanReport
 from infraguard.policies.catalog import PolicyCatalog
 from infraguard.reporting.markdown_report import render_markdown
 from infraguard.reporting.table import print_table
@@ -33,7 +34,7 @@ def export(recording: Console, name: str, title: str) -> None:
     (OUTPUT / name).write_text(svg, encoding="utf-8")
 
 
-def build_report():
+def build_report() -> ScanReport:
     """Run the same deterministic offline scan used by the README quick demo."""
     catalog = PolicyCatalog.load()
     collectors = [
@@ -50,7 +51,7 @@ def build_report():
     )
 
 
-def scan_visual(report) -> None:
+def scan_visual(report: ScanReport) -> None:
     recording = console(132)
     recording.print(
         Panel.fit(
@@ -64,7 +65,7 @@ def scan_visual(report) -> None:
     export(recording, "scan-table.svg", "InfraGuard policy scan")
 
 
-def report_visual(report) -> None:
+def report_visual(report: ScanReport) -> None:
     markdown = render_markdown(report)
     excerpt = markdown.split("## Validator runs", 1)[0]
     recording = console(112)
@@ -72,7 +73,7 @@ def report_visual(report) -> None:
     export(recording, "markdown-report.svg", "InfraGuard Markdown report")
 
 
-def metrics_visual(report) -> None:
+def metrics_visual(report: ScanReport) -> None:
     recording = console(108)
     recording.print("[bold cyan]InfraGuard · latest scan[/]\n")
     cards = Table.grid(expand=True)
@@ -130,35 +131,14 @@ def mcp_visual() -> None:
     export(recording, "mcp-tools.svg", "InfraGuard MCP tools")
 
 
-def guardrail_visual() -> None:
-    recording = console(108)
-    recording.print(
-        Panel.fit(
-            "[bold]InfraGuard remediation approval[/]\n\n"
-            "Proposal   [cyan]6c13e30a[/]  (rule_based)\n"
-            "Finding    [bold red]K8S-SEC-001 · Privileged container[/]\n"
-            "Target     ig-noncompliant/Deployment/vulnerable-app\n\n"
-            "Checks     schema [green]✓[/]   policy [green]✓[/]   "
-            "dry-run [green]✓[/]   approval [yellow]waiting[/]\n\n"
-            "[red]- privileged: true[/]\n"
-            "[green]+ privileged: false[/]\n\n"
-            'Type the resource name [bold]"vulnerable-app"[/] to approve.',
-            border_style="yellow",
-            title="Human approval boundary",
-        )
-    )
-    export(recording, "approval-prompt.svg", "InfraGuard approval prompt")
-
-
 def main() -> None:
-    """Regenerate every employer-facing README visual."""
+    """Regenerate README captures from executed offline output."""
     report = build_report()
     scan_visual(report)
     report_visual(report)
     metrics_visual(report)
     mcp_visual()
-    guardrail_visual()
-    print(f"generated 5 visuals in {OUTPUT}")
+    print(f"generated 4 visuals in {OUTPUT}")
 
 
 if __name__ == "__main__":
