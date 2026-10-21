@@ -64,6 +64,13 @@ def test_validate_requires_a_target() -> None:
     assert result.exit_code == 2
 
 
+def test_missing_input_is_rejected_before_scanning(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["validate", "missing.yaml"])
+    assert result.exit_code == 2
+    assert "does not exist" in unstyle(result.output)
+
+
 def test_scan_plan_only_and_rerender(tmp_path: Path) -> None:
     result = runner.invoke(
         app,

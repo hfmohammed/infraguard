@@ -6,8 +6,8 @@ Measurements recorded locally on 2026-10-21 from the offline suite. Live cluster
 |---|---:|
 | Policy catalog | 21 (13 Kubernetes, 8 Terraform) |
 | Seeded policy coverage | 21/21 |
-| Pytest cases | 152 unit cases; 12 cluster cases run separately in CI |
-| Python test coverage | 86.82% with branch coverage enabled |
+| Pytest cases | 153 unit cases; 12 cluster cases run separately in CI |
+| Python test coverage | 86.76% with branch coverage enabled |
 | Rego tests | 78 passed, including positive/negative control cases |
 | Seeded precision / recall | 100% / 100%, exact expected policy/resource pairs |
 | Mixed seeded scan | 6 resources, 20 findings, all 19 applicable catalog controls detected |

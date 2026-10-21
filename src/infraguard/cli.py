@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+from enum import StrEnum
 from io import StringIO
 from pathlib import Path
 from threading import Event
@@ -46,6 +49,15 @@ console = Console()
 DEFAULT_ROOT = Path.cwd()
 
 
+class LogLevel(StrEnum):
+    """Supported diagnostic logging levels."""
+
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
 def version_callback(value: bool) -> None:
     """Print package version and stop."""
     if value:
@@ -56,8 +68,14 @@ def version_callback(value: bool) -> None:
 @app.callback()
 def root(
     version: bool = typer.Option(False, "--version", callback=version_callback, is_eager=True),
+    no_color: Annotated[bool, typer.Option("--no-color")] = False,
+    log_level: Annotated[LogLevel, typer.Option(case_sensitive=False)] = LogLevel.INFO,
 ) -> None:
     """Run InfraGuard."""
+    logging.basicConfig(level=log_level.value.upper())
+    if no_color:
+        console.no_color = True
+        os.environ["NO_COLOR"] = "1"
 
 
 def _severity(value: str) -> Severity | Literal["NONE"]:
@@ -93,12 +111,12 @@ def _emit(
 
 @app.command()
 def validate(
-    paths: Annotated[list[Path] | None, typer.Argument()] = None,
-    helm_chart: Annotated[Path | None, typer.Option()] = None,
-    values: Annotated[list[Path] | None, typer.Option()] = None,
-    plan_json: Annotated[Path | None, typer.Option()] = None,
-    terraform_dir: Annotated[Path | None, typer.Option()] = None,
-    policy_dir: Annotated[Path | None, typer.Option()] = None,
+    paths: Annotated[list[Path] | None, typer.Argument(exists=True)] = None,
+    helm_chart: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
+    values: Annotated[list[Path] | None, typer.Option(exists=True, dir_okay=False)] = None,
+    plan_json: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
+    terraform_dir: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
+    policy_dir: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
     schema_only: Annotated[bool, typer.Option()] = False,
     policy_only: Annotated[bool, typer.Option()] = False,
     fail_on: Annotated[str, typer.Option()] = "HIGH",
@@ -147,9 +165,9 @@ def scan(
     cluster: Annotated[bool, typer.Option("--cluster/--no-cluster")] = True,
     context: Annotated[str | None, typer.Option()] = None,
     namespace: Annotated[list[str] | None, typer.Option("--namespace", "-n")] = None,
-    terraform_dir: Annotated[Path | None, typer.Option()] = None,
-    plan_json: Annotated[Path | None, typer.Option()] = None,
-    policy_dir: Annotated[Path | None, typer.Option()] = None,
+    terraform_dir: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
+    plan_json: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
+    policy_dir: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
     skip_schema: Annotated[bool, typer.Option()] = False,
     fail_on: Annotated[str, typer.Option()] = "HIGH",
     format: Annotated[list[str] | None, typer.Option("--format")] = None,
