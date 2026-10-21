@@ -94,3 +94,34 @@ def test_temporary_plan_does_not_change_parent_environment(tmp_path, monkeypatch
     assert TerraformPlanCollector(tf_dir=module).plan()["resource_changes"] == []
     assert [command[1] for command in commands] == ["init", "plan", "show"]
     assert list(module.iterdir()) == [module / "main.tf"]
+
+
+def test_full_plan_redacts_planned_values_outputs_and_provider_constants(tmp_path):
+    path = tmp_path / "fixture.json"
+    path.write_text(
+        json.dumps(
+            {
+                "configuration": {
+                    "provider_config": {
+                        "aws": {"expressions": {"secret_key": {"constant_value": "literal-secret"}}}
+                    }
+                },
+                "planned_values": {
+                    "outputs": {"token": {"value": "output-secret", "sensitive": True}},
+                    "root_module": {
+                        "resources": [
+                            {
+                                "values": {"password": "planned-secret"},
+                                "sensitive_values": {"password": True},
+                            }
+                        ]
+                    },
+                },
+                "resource_changes": [],
+            }
+        )
+    )
+    cleaned = json.dumps(TerraformPlanCollector(plan_json=path).plan())
+    assert "literal-secret" not in cleaned
+    assert "output-secret" not in cleaned
+    assert "planned-secret" not in cleaned

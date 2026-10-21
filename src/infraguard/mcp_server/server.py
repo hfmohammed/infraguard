@@ -201,14 +201,20 @@ def validate_patch(
         created_at=datetime.now(UTC),
     )
     checked = check_proposal(
-        proposal, context=_context, audit_path=_allowed_root / "audit/remediation.jsonl"
+        proposal,
+        context=_context,
+        audit_path=_allowed_root / "audit/remediation.jsonl",
+        take_ownership=True,
     )
     return {
         **checked.model_dump(mode="json"),
         "applied": False,
         "target_matches": True,
         "passed": all(s.result == "pass" for s in checked.steps),
-        "next_step": "a human must run `infraguard remediate apply` and approve",
+        "next_step": (
+            "a human must review ownership transfer, run "
+            "`infraguard remediate apply --take-ownership`, and approve"
+        ),
     }
 
 

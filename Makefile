@@ -9,9 +9,9 @@ help: ## list available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 setup: ## install Python package and development dependencies
-	python3.12 -m venv .venv
-	$(PYTHON) -m pip install -U pip
-	$(PYTHON) -m pip install -e '.[dev]'
+	python3 -m venv .venv
+	.venv/bin/python -m pip install -U pip
+	.venv/bin/python -m pip install -e '.[dev]'
 	./scripts/install-tools.sh
 	.venv/bin/pre-commit install
 

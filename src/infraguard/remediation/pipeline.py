@@ -122,6 +122,8 @@ def _dynamic_resource(proposal: RemediationProposal, context: str | None) -> Any
     try:
         config.load_kube_config(context=context)
     except ConfigException:
+        if context is not None:
+            raise
         config.load_incluster_config()
     api = dynamic.DynamicClient(client.ApiClient())
     return api.resources.get(
@@ -131,7 +133,11 @@ def _dynamic_resource(proposal: RemediationProposal, context: str | None) -> Any
 
 
 def _server_side_apply(
-    proposal: RemediationProposal, context: str | None, *, dry_run: bool
+    proposal: RemediationProposal,
+    context: str | None,
+    *,
+    dry_run: bool,
+    take_ownership: bool = False,
 ) -> dict[str, Any]:
     resource = _dynamic_resource(proposal, context)
     kwargs: dict[str, Any] = {
@@ -142,6 +148,8 @@ def _server_side_apply(
     }
     if proposal.target.namespace:
         kwargs["namespace"] = proposal.target.namespace
+    if take_ownership:
+        kwargs["force_conflicts"] = True
     if dry_run:
         response = ReadOnlyK8s(resource).dry_run_apply("patch", **kwargs)
     else:
@@ -170,6 +178,7 @@ def check_proposal(
     context: str | None = None,
     catalog: PolicyCatalog | None = None,
     audit_path: Path = Path("audit/remediation.jsonl"),
+    take_ownership: bool = False,
 ) -> PipelineResult:
     """Run schema, kubeconform, policy, and server-side dry-run gates."""
     catalog = catalog or PolicyCatalog.load()
@@ -234,10 +243,13 @@ def check_proposal(
 
     started = perf_counter()
     try:
-        dry_run_object = _server_side_apply(proposal, context, dry_run=True)
+        dry_run_object = _server_side_apply(
+            proposal, context, dry_run=True, take_ownership=take_ownership
+        )
         dry_run = StepResult(
             step="dry_run",
             result="pass",
+            detail="field ownership transfer requested" if take_ownership else None,
             duration_ms=(perf_counter() - started) * 1000,
         )
     except Exception as error:
@@ -255,6 +267,7 @@ def check_proposal(
         steps=steps,
         diff=_diff(live, dry_run_object),
         applied=False,
+        ownership_transfer=take_ownership,
     )
 
 
@@ -264,9 +277,16 @@ def apply_proposal(
     context: str | None = None,
     catalog: PolicyCatalog | None = None,
     audit_path: Path = Path("audit/remediation.jsonl"),
+    take_ownership: bool = False,
 ) -> PipelineResult:
     """Run all gates, request interactive approval, then perform server-side apply."""
-    checked = check_proposal(proposal, context=context, catalog=catalog, audit_path=audit_path)
+    checked = check_proposal(
+        proposal,
+        context=context,
+        catalog=catalog,
+        audit_path=audit_path,
+        take_ownership=take_ownership,
+    )
     if any(step.result == "fail" for step in checked.steps):
         return checked
 
@@ -299,7 +319,7 @@ def apply_proposal(
 
     started = perf_counter()
     try:
-        _server_side_apply(proposal, context, dry_run=False)
+        _server_side_apply(proposal, context, dry_run=False, take_ownership=take_ownership)
         applied = StepResult(
             step="apply",
             result="pass",
@@ -333,6 +353,12 @@ def print_approval_summary(
         ("Target", proposal.target.key()),
         ("Context", context or "current"),
         ("Rationale", proposal.rationale),
+        (
+            "Field ownership",
+            "transfer conflicting fields"
+            if checked.ownership_transfer
+            else "preserve existing owners",
+        ),
     ):
         console.print(f"{label}: {value}", markup=False)
     console.print(

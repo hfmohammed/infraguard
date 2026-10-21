@@ -10,4 +10,6 @@
 - 2026-10-21: The document-count test now uses valid YAML separators (`\n---\n`); its previous separator produced malformed YAML rather than 51 documents.
 - 2026-10-21: Remediation rejects redacted placeholders. Copying a redacted live manifest back to Kubernetes could otherwise overwrite sensitive environment values.
 - 2026-10-21: Metrics serve a scan snapshot and process-local operation counters. They do not imply a periodic scanner or a durable aggregate across restarts.
+- 2026-10-21: Helm field ownership conflicts stop remediation by default. An explicit `--take-ownership` option is required for the sample fix; dry-run and apply share that setting and the approval prompt discloses it. MCP simulates ownership transfer without persisting changes.
+- 2026-10-21: Full Terraform plan access redacts planned/prior values and sensitive outputs, and drops configuration constants after extracting relationship references.
 

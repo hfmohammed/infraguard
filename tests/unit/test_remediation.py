@@ -94,6 +94,23 @@ def test_manifest_input_size_limit() -> None:
         validate_manifest_size_and_count("x" * (MAX_MANIFEST_BYTES + 1))
 
 
+def test_redaction_placeholder_cannot_be_applied():
+    item = proposal(
+        spec={
+            "template": {
+                "spec": {
+                    "containers": [
+                        {"name": "app", "env": [{"name": "API_TOKEN", "value": "***REDACTED***"}]}
+                    ]
+                }
+            }
+        }
+    )
+    step = validate_proposal(item)
+    assert step.result == "fail"
+    assert "redacted values" in step.detail
+
+
 def test_noninteractive_approval_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     with pytest.raises(RuntimeError, match="interactive terminal"):

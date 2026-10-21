@@ -60,11 +60,15 @@ def test_remediation_stops_at_expected_gate(cluster_context, fixture, failed_ste
     proposal = RemediationProposal.model_validate(
         yaml.safe_load((Path("samples/remediation") / fixture).read_text())
     )
-    result = check_proposal(proposal, context=cluster_context, audit_path=tmp_path / "audit.jsonl")
+    result = check_proposal(
+        proposal, context=cluster_context, audit_path=tmp_path / "audit.jsonl", take_ownership=True
+    )
     failures = [s.step for s in result.steps if s.result == "fail"]
-    assert failures == ([failed_step] if failed_step else [])
+    assert failures == ([failed_step] if failed_step else []), result.model_dump_json()
     if failed_step:
         assert result.steps[-1].step == failed_step
+        if failed_step == "dry_run":
+            assert "immutable" in (result.steps[-1].detail or "").lower()
     else:
         assert len(result.steps) == 4
         assert "privileged" in result.diff
@@ -112,8 +116,27 @@ def test_cli_refuses_noninteractive_apply_after_real_checks(cluster_context):
     before = live_deployment(cluster_context).metadata.resource_version
     result = CliRunner().invoke(
         app,
-        ["remediate", "apply", "samples/remediation/good-patch.yaml", "--context", cluster_context],
+        [
+            "remediate",
+            "apply",
+            "samples/remediation/good-patch.yaml",
+            "--context",
+            cluster_context,
+            "--take-ownership",
+        ],
     )
     assert result.exit_code == 4, result.stdout
     assert "interactive terminal" in result.stdout
+    assert live_deployment(cluster_context).metadata.resource_version == before
+
+
+def test_helm_field_ownership_is_preserved_by_default(cluster_context, tmp_path):
+    proposal = RemediationProposal.model_validate(
+        yaml.safe_load(Path("samples/remediation/good-patch.yaml").read_text())
+    )
+    before = live_deployment(cluster_context).metadata.resource_version
+    checked = check_proposal(proposal, context=cluster_context, audit_path=tmp_path / "audit.jsonl")
+    assert checked.steps[-1].step == "dry_run"
+    assert checked.steps[-1].result == "fail"
+    assert "conflict" in checked.steps[-1].detail.lower()
     assert live_deployment(cluster_context).metadata.resource_version == before

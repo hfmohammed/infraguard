@@ -43,6 +43,8 @@ class KubernetesLiveCollector:
             try:
                 config.load_kube_config(context=self.context)
             except ConfigException:
+                if self.context is not None:
+                    raise
                 config.load_incluster_config()
             core, apps, batch, networking = (
                 ReadOnlyK8s(client.CoreV1Api()),

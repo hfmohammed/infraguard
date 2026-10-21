@@ -44,3 +44,17 @@ def redact_sensitive(value: Any, sensitive: Any) -> Any:
             for i, item in enumerate(value)
         ]
     return copy.deepcopy(value)
+
+
+def redact_plan_values(value: Any) -> Any:
+    """Redact Terraform planned/prior values and output sensitivity markers."""
+    if isinstance(value, list):
+        return [redact_plan_values(item) for item in value]
+    if not isinstance(value, dict):
+        return copy.deepcopy(value)
+    result = {key: redact_plan_values(item) for key, item in value.items()}
+    if "values" in result and "sensitive_values" in value:
+        result["values"] = redact_sensitive(value["values"], value["sensitive_values"])
+    if "value" in result and value.get("sensitive") is True:
+        result["value"] = "***REDACTED***"
+    return result

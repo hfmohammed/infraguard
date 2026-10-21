@@ -21,13 +21,16 @@ def test_read_only_wrapper_allows_lists() -> None:
     assert ReadOnlyK8s(DummyClient()).list_pod() == ["pod"]
 
 
-def test_read_only_wrapper_blocks_mutations() -> None:
+@pytest.mark.parametrize("method", ["create_pod", "patch_pod", "replace_pod", "delete_pod"])
+def test_read_only_wrapper_blocks_mutations(method) -> None:
     with pytest.raises(ReadOnlyViolation):
-        ReadOnlyK8s(DummyClient()).delete_pod()
+        getattr(ReadOnlyK8s(DummyClient()), method)()
 
 
 def test_dry_run_is_forced() -> None:
-    result = ReadOnlyK8s(DummyClient()).dry_run_apply("patch_pod", body={})
+    result = ReadOnlyK8s(DummyClient()).dry_run_apply(
+        "patch_pod", body={}, dry_run=None, field_manager="untrusted"
+    )
     assert result["dry_run"] == "All"
     assert result["field_manager"] == "infraguard"
 
@@ -42,3 +45,13 @@ def test_path_guard_accepts_nested_file(tmp_path: Path) -> None:
     nested.parent.mkdir()
     nested.write_text("{}")
     assert guarded_path("plans/plan.json", tmp_path) == nested
+
+
+def test_path_guard_rejects_symlink_escape(tmp_path: Path) -> None:
+    root = tmp_path / "allowed"
+    root.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}")
+    (root / "linked.json").symlink_to(outside)
+    with pytest.raises(PathGuardError):
+        guarded_path("linked.json", root)

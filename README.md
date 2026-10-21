@@ -207,7 +207,7 @@ infraguard remediate apply proposal.yaml --context kind-infraguard
 
 `check` stops after server-side dry-run. `apply` reruns the gates, refuses noninteractive input, requires the exact resource name, and only then performs server-side apply. Each executed step is appended to `audit/remediation.jsonl`; the manifest itself is never logged, only its SHA-256.
 
-The approval screen shows the target, context, rationale, gate outcomes, and checked diff before asking for input. Proposals containing redaction placeholders are rejected to avoid overwriting secret values. For the bundled cluster, try `infraguard remediate check samples/remediation/good-patch.yaml --context kind-infraguard`; the five files under `bad-patches/` exercise identity, kind, schema, policy, and admission failures.
+The approval screen shows the target, context, rationale, gate outcomes, and checked diff before asking for input. Proposals containing redaction placeholders are rejected to avoid overwriting secret values. For the Helm-managed sample, run `infraguard remediate check samples/remediation/good-patch.yaml --context kind-infraguard --take-ownership`. The flag explicitly permits transferring conflicting field ownership; without it, a Helm conflict fails the dry-run. Real apply still requires interactive approval. The five files under `bad-patches/` exercise identity, kind, schema, policy, and admission failures.
 
 ## Metrics endpoint
 

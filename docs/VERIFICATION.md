@@ -37,11 +37,13 @@ Local cluster tests skip if kind is unavailable; CI treats an unavailable cluste
 The automated cluster tests intentionally do not simulate a human authorizing a real mutation. In a terminal, inspect and run:
 
 ```bash
-infraguard remediate check samples/remediation/good-patch.yaml --context kind-infraguard
-infraguard remediate apply samples/remediation/good-patch.yaml --context kind-infraguard
+infraguard remediate check samples/remediation/good-patch.yaml --context kind-infraguard --take-ownership
+infraguard remediate apply samples/remediation/good-patch.yaml --context kind-infraguard --take-ownership
 ```
 
 Review the context and diff, then type `vulnerable-app` to approve. A re-scan of `ig-noncompliant` should no longer report `K8S-SEC-001`; other deliberately seeded controls still fail. `make deploy-samples` restores the original workload. Approval must be supplied by the operator; there is no unattended approval flag.
+
+Helm owns the seeded fields. Transferring those fields requires `--take-ownership`, which is shown in the approval screen and audit record. A separate integration test proves that ownership conflicts stop the default path. MCP simulates the transfer only in a dry-run, returns `ownership_transfer: true`, and directs the human to the explicit CLI option.
 
 ## Limits
 

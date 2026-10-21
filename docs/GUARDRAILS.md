@@ -10,3 +10,5 @@ InfraGuard follows one rule: an AI may propose, the pipeline verifies, and a hum
 
 Each executed step appends one JSON line to `audit/remediation.jsonl`. The log includes actor, context, result, target, proposer, and a SHA-256 digest; it never stores the manifest or secrets. MCP stops before approval and apply.
 
+Field ownership conflicts fail by default. For a Helm-managed object, `--take-ownership` explicitly requests a server-side ownership transfer; the dry-run uses the same setting as apply. The approval screen displays this choice. MCP can simulate the transfer but cannot persist it, and its response identifies the requested ownership behavior.
+

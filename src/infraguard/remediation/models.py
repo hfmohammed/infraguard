@@ -40,3 +40,4 @@ class PipelineResult(BaseModel):
     steps: list[StepResult]
     diff: str | None = None
     applied: bool = False
+    ownership_transfer: bool = False

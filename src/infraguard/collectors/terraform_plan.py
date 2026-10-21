@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from infraguard.models import Resource, ResourceRef, SourceType, TerraformChange
-from infraguard.utils.redact import redact_sensitive
+from infraguard.utils.redact import redact_plan_values, redact_sensitive
 from infraguard.utils.tools import run
 
 
@@ -50,8 +50,14 @@ class TerraformPlanCollector:
                     visit(call.get("module", {}), f"{prefix}module.{name}.")
 
             visit(self._plan.get("configuration", {}).get("root_module", {}))
+            # Configuration expressions can contain literal provider credentials.
+            # Keep only relationship references needed by the policy joins.
+            self._plan.pop("configuration", None)
+            self._plan = redact_plan_values(self._plan)
             for resource in self._plan.get("resource_changes", []):
-                resource["_references"] = references.get(resource["address"], {})
+                resource["_references"] = references.get(
+                    resource["address"], resource.get("_references", {})
+                )
                 change = resource.get("change", {})
                 for phase in ("before", "after"):
                     change[phase] = redact_sensitive(

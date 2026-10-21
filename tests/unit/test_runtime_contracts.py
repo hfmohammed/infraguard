@@ -110,7 +110,8 @@ def test_approval_requires_exact_resource_name(monkeypatch, answer, expected):
 
 
 @pytest.mark.parametrize("dry_run", [True, False])
-def test_dynamic_apply_preserves_server_side_contract(monkeypatch, dry_run):
+@pytest.mark.parametrize("take_ownership", [True, False])
+def test_dynamic_apply_preserves_server_side_contract(monkeypatch, dry_run, take_ownership):
     from datetime import UTC, datetime
 
     from infraguard.models import ResourceRef, SourceType
@@ -133,7 +134,8 @@ def test_dynamic_apply_preserves_server_side_contract(monkeypatch, dry_run):
         proposer="rule_based",
         created_at=datetime.now(UTC),
     )
-    _server_side_apply(item, "kind-infraguard", dry_run=dry_run)
+    _server_side_apply(item, "kind-infraguard", dry_run=dry_run, take_ownership=take_ownership)
     assert calls[0]["field_manager"] == "infraguard"
     assert calls[0]["content_type"] == "application/apply-patch+yaml"
     assert calls[0].get("dry_run") == ("All" if dry_run else None)
+    assert calls[0].get("force_conflicts") == (True if take_ownership else None)

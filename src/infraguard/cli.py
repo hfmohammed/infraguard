@@ -317,9 +317,14 @@ def remediate_propose(
 def remediate_check(
     proposal_yaml: Path,
     context: Annotated[str | None, typer.Option()] = None,
+    take_ownership: Annotated[
+        bool, typer.Option(help="Simulate transfer of conflicting field ownership.")
+    ] = False,
 ) -> None:
     """Run schema, policy, and server-side dry-run checks without applying."""
-    result = check_proposal(_load_proposal(proposal_yaml), context=context)
+    result = check_proposal(
+        _load_proposal(proposal_yaml), context=context, take_ownership=take_ownership
+    )
     typer.echo(result.model_dump_json(indent=2))
     if any(step.result == "fail" for step in result.steps):
         raise typer.Exit(1)
@@ -329,11 +334,14 @@ def remediate_check(
 def remediate_apply(
     proposal_yaml: Path,
     context: Annotated[str | None, typer.Option()] = None,
+    take_ownership: Annotated[
+        bool, typer.Option(help="Transfer conflicting fields only after approval.")
+    ] = False,
 ) -> None:
     """Run every gate and apply only after interactive human approval."""
     proposal = _load_proposal(proposal_yaml)
     try:
-        result = apply_proposal(proposal, context=context)
+        result = apply_proposal(proposal, context=context, take_ownership=take_ownership)
     except RuntimeError as error:
         typer.echo(str(error))
         raise typer.Exit(4) from error
